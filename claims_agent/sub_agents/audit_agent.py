@@ -15,7 +15,6 @@ from __future__ import annotations
 from google.adk.agents import LlmAgent
 
 from ..config import DEFAULT_MODEL
-from ..schemas import FinalDecision
 from ..tools.redis_tools import write_audit_log
 
 audit_agent = LlmAgent(
@@ -29,10 +28,10 @@ audit_agent = LlmAgent(
 
 You have access to the complete triage pipeline results in session state:
 - Normalised claim:  {normalized_claim}
-- Classification:    {classification}
-- Document check:    {doc_check}
-- Policy check:      {policy_check}
-- Fraud assessment:  {fraud_assessment}
+- Classification:    {classification?}
+- Document check:    {doc_check?}
+- Policy check:      {policy_check?}
+- Fraud assessment:  {fraud_assessment?}
 
 Your tasks:
 1. Determine the overall_status of the claim using this priority order:
@@ -62,6 +61,5 @@ Your tasks:
    Raw JSON only — no markdown, no explanation.
 """,
     tools=[write_audit_log],
-    output_schema=FinalDecision,
     output_key="final_decision",
 )

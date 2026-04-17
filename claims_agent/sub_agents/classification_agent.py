@@ -15,7 +15,6 @@ from __future__ import annotations
 from google.adk.agents import LlmAgent
 
 from ..config import DEFAULT_MODEL
-from ..schemas import Classification
 from ..tools.redis_tools import write_audit_log
 
 classification_agent = LlmAgent(
@@ -46,6 +45,5 @@ Your tasks:
    Do not include any explanation or markdown fences — raw JSON only.
 """,
     tools=[write_audit_log],
-    output_schema=Classification,
     output_key="classification",
 )

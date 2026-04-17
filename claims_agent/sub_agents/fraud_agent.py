@@ -14,7 +14,6 @@ from __future__ import annotations
 from google.adk.agents import LlmAgent
 
 from ..config import DEFAULT_MODEL
-from ..schemas import FraudAssessment
 from ..tools.redis_tools import push_fraud_queue, write_audit_log
 
 fraud_agent = LlmAgent(
@@ -28,9 +27,9 @@ fraud_agent = LlmAgent(
 
 You have access to the following session state:
 - Normalised claim: {normalized_claim}
-- Classification: {classification}
-- Document check: {doc_check}
-- Policy check: {policy_check}
+- Classification: {classification?}
+- Document check: {doc_check?}
+- Policy check: {policy_check?}
 
 Your tasks:
 1. Analyse the claim holistically for fraud indicators. Consider these red flags:
@@ -68,6 +67,5 @@ Your tasks:
    Raw JSON only — no markdown, no explanation.
 """,
     tools=[push_fraud_queue, write_audit_log],
-    output_schema=FraudAssessment,
     output_key="fraud_assessment",
 )

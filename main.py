@@ -141,12 +141,14 @@ async def run_pipeline(claim_input: str) -> dict:
                 for part in event.content.parts:
                     if hasattr(part, "function_call") and part.function_call:
                         fc = part.function_call
-                        print(f"  [{event.author}] calling tool: {fc.name}")
+                        args_preview = str(fc.args)[:200].replace("\n", " ")
+                        print(f"  [{event.author}] → TOOL CALL: {fc.name}({args_preview})")
                     elif hasattr(part, "function_response") and part.function_response:
-                        pass  # suppress verbose tool responses
-                    elif hasattr(part, "text") and part.text:
-                        preview = part.text[:120].replace("\n", " ")
-                        print(f"  [{event.author}] → {preview}...")
+                        fr = part.function_response
+                        resp_preview = str(fr.response)[:300].replace("\n", " ")
+                        print(f"  [{event.author}] ← TOOL RESULT: {fr.name} → {resp_preview}")
+                    elif hasattr(part, "text") and part.text and part.text.strip():
+                        print(f"  [{event.author}] OUTPUT:\n{part.text}")
 
     # Retrieve final session state
     updated_session = await session_service.get_session(

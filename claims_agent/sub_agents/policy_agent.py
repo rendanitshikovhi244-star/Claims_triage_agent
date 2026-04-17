@@ -16,7 +16,6 @@ from __future__ import annotations
 from google.adk.agents import LlmAgent
 
 from ..config import DEFAULT_MODEL
-from ..schemas import PolicyCheckResult
 from ..tools.policy_tools import lookup_policy, validate_claim_against_policy
 from ..tools.redis_tools import write_audit_log
 
@@ -57,6 +56,5 @@ Your tasks:
    Raw JSON only — no markdown, no explanation.
 """,
     tools=[lookup_policy, validate_claim_against_policy, write_audit_log],
-    output_schema=PolicyCheckResult,
     output_key="policy_check",
 )

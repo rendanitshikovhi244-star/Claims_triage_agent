@@ -16,7 +16,6 @@ from __future__ import annotations
 from google.adk.agents import LlmAgent
 
 from ..config import DEFAULT_MODEL
-from ..schemas import ClaimIntake
 
 intake_agent = LlmAgent(
     name="IntakeAgent",
@@ -44,6 +43,5 @@ Rules:
 Respond ONLY with a valid JSON object matching the ClaimIntake schema.
 Do not include any explanation or markdown fences — raw JSON only.
 """,
-    output_schema=ClaimIntake,
     output_key="normalized_claim",
 )

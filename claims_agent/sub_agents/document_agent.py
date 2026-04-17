@@ -14,7 +14,6 @@ from __future__ import annotations
 from google.adk.agents import LlmAgent
 
 from ..config import DEFAULT_MODEL
-from ..schemas import DocCheckResult
 from ..tools.document_tools import check_present_documents, get_required_documents
 from ..tools.redis_tools import write_audit_log
 
@@ -56,6 +55,5 @@ Your tasks:
    Raw JSON only — no markdown, no explanation.
 """,
     tools=[get_required_documents, check_present_documents, write_audit_log],
-    output_schema=DocCheckResult,
     output_key="doc_check",
 )
