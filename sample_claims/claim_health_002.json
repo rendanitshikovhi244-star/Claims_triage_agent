@@ -1,0 +1,15 @@
+{
+  "claim_id": "CLM-20260417-002",
+  "policy_number": "POL-1002",
+  "claimant_name": "James Okafor",
+  "claim_type": "health",
+  "incident_date": "2026-04-10",
+  "amount_claimed": 12750.00,
+  "description": "I was admitted to St. Mary's General Hospital on April 10th for an emergency appendectomy. The surgery was performed by Dr. Elena Vasquez and I was discharged after 3 days. I have attached all medical records, the itemised hospital bill, and the doctor's discharge note. I am requesting reimbursement for the full amount as my plan covers emergency surgery with a $1,000 deductible.",
+  "documents_provided": [
+    "medical_records",
+    "doctor_note",
+    "itemised_bill",
+    "proof_of_insurance"
+  ]
+}

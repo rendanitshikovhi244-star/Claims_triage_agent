@@ -1,0 +1,15 @@
+{
+  "claim_id": "CLM-20260417-001",
+  "policy_number": "POL-1001",
+  "claimant_name": "Sarah Mitchell",
+  "claim_type": "auto",
+  "incident_date": "2026-04-15",
+  "amount_claimed": 8500.00,
+  "description": "I was involved in a rear-end collision on the I-95 highway. The other driver ran a red light and struck the rear of my vehicle at approximately 40 mph. My 2022 Honda Accord sustained significant damage to the rear bumper, trunk, and exhaust system. No injuries were sustained. A police report was filed at the scene (Report #2026-04-15-7823).",
+  "documents_provided": [
+    "police_report",
+    "photos_of_damage",
+    "repair_estimate",
+    "drivers_license"
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "claim_id": "CLM-20260417-003",
+  "policy_number": "POL-9999",
+  "claimant_name": "Viktor Krasnikov",
+  "claim_type": "property",
+  "incident_date": "2026-04-16",
+  "amount_claimed": 9800.00,
+  "description": "My luxury watch collection and several high-end electronics were stolen from my home. The theft occurred yesterday, just one day after I took out this policy. I need the full amount urgently as I have bills to pay immediately. I have comprehensive documentation of every single item and have already filed a report. I expect this to be processed today without any delays.",
+  "documents_provided": [
+    "purchase_receipts",
+    "photos_of_damage",
+    "fire_or_police_report",
+    "proof_of_ownership",
+    "property_deed",
+    "repair_estimate"
+  ]
+}
