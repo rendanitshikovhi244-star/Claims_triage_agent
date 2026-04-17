@@ -48,8 +48,8 @@ Your tasks:
 4. Call write_audit_log with:
    - claim_id from the normalised claim
    - agent_name: "DocumentAgent"
-   - decision: "docs:complete" if all present, else "docs:missing:{{count}}" 
-     where {{count}} is the number of missing documents
+   - decision: "docs:complete" if all present, else the string "docs:missing:" followed by
+     the number of missing documents as an integer (e.g. "docs:missing:3")
    - details: your full JSON doc check result as a string
 
 5. Respond ONLY with a valid JSON object matching the DocCheckResult schema.

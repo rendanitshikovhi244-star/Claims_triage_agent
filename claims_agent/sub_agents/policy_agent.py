@@ -49,7 +49,8 @@ Your tasks:
 4. Call write_audit_log with:
    - claim_id from the normalised claim
    - agent_name: "PolicyAgent"
-   - decision: "policy:passed" if no violations, else "policy:violations:{{count}}"
+   - decision: "policy:passed" if no violations, else the string "policy:violations:" followed by
+     the number of violations as an integer (e.g. "policy:violations:2")
    - details: your full JSON policy check result as a string
 
 5. Respond ONLY with a valid JSON object matching the PolicyCheckResult schema.

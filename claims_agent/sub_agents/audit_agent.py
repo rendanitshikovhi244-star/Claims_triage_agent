@@ -49,12 +49,13 @@ Your tasks:
 4. Write a clear, professional summary (2–4 sentences) explaining the triage outcome
    for a human reviewer.
 
-5. Set audit_key to "audit:{{claim_id}}" (e.g. "audit:CLM-001").
+5. Set audit_key to the string "audit:" followed by the claim_id (e.g. "audit:CLM-001").
 
 6. Call write_audit_log with:
    - claim_id from the normalised claim
    - agent_name: "AuditSummaryAgent"
-   - decision: "final:{{overall_status}}" (e.g. "final:approved_for_processing")
+   - decision: the string "final:" followed by the overall_status value
+     (e.g. "final:approved_for_processing" or "final:fraud_review")
    - details: your full JSON final decision as a string
 
 7. Respond ONLY with a valid JSON object matching the FinalDecision schema.

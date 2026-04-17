@@ -39,7 +39,7 @@ Your tasks:
 3. Call write_audit_log with:
    - claim_id from the normalised claim
    - agent_name: "ClassificationAgent"
-   - decision: "classified:{{urgency}}" (e.g. "classified:high")
+   - decision: the string "classified:" followed by the urgency value (e.g. "classified:high" or "classified:low")
    - details: your full JSON classification result as a string
 
 4. Respond ONLY with a valid JSON object matching the Classification schema.

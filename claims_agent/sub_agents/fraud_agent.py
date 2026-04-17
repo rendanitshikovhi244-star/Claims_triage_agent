@@ -60,7 +60,8 @@ Your tasks:
 6. Call write_audit_log with:
    - claim_id from the normalised claim
    - agent_name: "FraudAgent"
-   - decision: "fraud:{{recommendation}}" (e.g. "fraud:proceed" or "fraud:flag_for_review")
+   - decision: the string "fraud:" followed by the recommendation value
+     (e.g. "fraud:proceed", "fraud:flag_for_review", or "fraud:reject")
    - details: your full JSON fraud assessment as a string
 
 7. Respond ONLY with a valid JSON object matching the FraudAssessment schema.
