@@ -29,7 +29,7 @@ from google.adk.runners import Runner
 from google.adk.sessions import DatabaseSessionService
 from google.genai import types
 
-load_dotenv()
+load_dotenv(Path(__file__).parent / "claims_agent" / ".env")
 
 # Import the root agent (SequentialAgent pipeline)
 from claims_agent.agent import root_agent

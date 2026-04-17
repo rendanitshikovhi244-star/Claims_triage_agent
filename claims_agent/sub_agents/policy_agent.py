@@ -14,15 +14,15 @@ Writes audit log and stores output under 'policy_check'.
 from __future__ import annotations
 
 from google.adk.agents import LlmAgent
-from google.genai import types
 
+from ..config import DEFAULT_MODEL
 from ..schemas import PolicyCheckResult
 from ..tools.policy_tools import lookup_policy, validate_claim_against_policy
 from ..tools.redis_tools import write_audit_log
 
 policy_agent = LlmAgent(
     name="PolicyAgent",
-    model="gemini-2.0-flash",
+    model=DEFAULT_MODEL,
     description="Validates the claim against policy rules and identifies any violations.",
     instruction="""You are an insurance policy compliance analyst.
 
@@ -49,7 +49,7 @@ Your tasks:
 4. Call write_audit_log with:
    - claim_id from the normalised claim
    - agent_name: "PolicyAgent"
-   - decision: "policy:passed" if no violations, else "policy:violations:{count}"
+   - decision: "policy:passed" if no violations, else "policy:violations:{{count}}"
    - details: your full JSON policy check result as a string
 
 5. Respond ONLY with a valid JSON object matching the PolicyCheckResult schema.
@@ -58,5 +58,4 @@ Your tasks:
     tools=[lookup_policy, validate_claim_against_policy, write_audit_log],
     output_schema=PolicyCheckResult,
     output_key="policy_check",
-    generate_content_config=types.GenerateContentConfig(temperature=0.1),
 )

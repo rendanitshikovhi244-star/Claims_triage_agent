@@ -14,13 +14,13 @@ The agent writes its normalised output to session state under the key
 from __future__ import annotations
 
 from google.adk.agents import LlmAgent
-from google.genai import types
 
+from ..config import DEFAULT_MODEL
 from ..schemas import ClaimIntake
 
 intake_agent = LlmAgent(
     name="IntakeAgent",
-    model="gemini-2.0-flash",
+    model=DEFAULT_MODEL,
     description=(
         "Normalises raw insurance claim input (JSON or free-text) into a "
         "structured ClaimIntake record."
@@ -46,5 +46,4 @@ Do not include any explanation or markdown fences — raw JSON only.
 """,
     output_schema=ClaimIntake,
     output_key="normalized_claim",
-    generate_content_config=types.GenerateContentConfig(temperature=0.1),
 )

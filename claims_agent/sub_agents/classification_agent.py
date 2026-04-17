@@ -13,14 +13,14 @@ Writes an audit log entry to Redis and stores its output under 'classification'.
 from __future__ import annotations
 
 from google.adk.agents import LlmAgent
-from google.genai import types
 
+from ..config import DEFAULT_MODEL
 from ..schemas import Classification
 from ..tools.redis_tools import write_audit_log
 
 classification_agent = LlmAgent(
     name="ClassificationAgent",
-    model="gemini-2.0-flash",
+    model=DEFAULT_MODEL,
     description="Classifies claim urgency and type, then records the decision in the audit log.",
     instruction="""You are an insurance claims triage specialist.
 
@@ -39,7 +39,7 @@ Your tasks:
 3. Call write_audit_log with:
    - claim_id from the normalised claim
    - agent_name: "ClassificationAgent"
-   - decision: "classified:{urgency}" (e.g. "classified:high")
+   - decision: "classified:{{urgency}}" (e.g. "classified:high")
    - details: your full JSON classification result as a string
 
 4. Respond ONLY with a valid JSON object matching the Classification schema.
@@ -48,5 +48,4 @@ Your tasks:
     tools=[write_audit_log],
     output_schema=Classification,
     output_key="classification",
-    generate_content_config=types.GenerateContentConfig(temperature=0.1),
 )

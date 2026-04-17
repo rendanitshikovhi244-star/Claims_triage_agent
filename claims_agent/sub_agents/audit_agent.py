@@ -13,14 +13,14 @@ Stores output under 'final_decision'.
 from __future__ import annotations
 
 from google.adk.agents import LlmAgent
-from google.genai import types
 
+from ..config import DEFAULT_MODEL
 from ..schemas import FinalDecision
 from ..tools.redis_tools import write_audit_log
 
 audit_agent = LlmAgent(
     name="AuditSummaryAgent",
-    model="gemini-2.0-flash",
+    model=DEFAULT_MODEL,
     description=(
         "Compiles the complete triage outcome into a FinalDecision and writes "
         "the audit summary entry to Redis."
@@ -49,12 +49,12 @@ Your tasks:
 4. Write a clear, professional summary (2–4 sentences) explaining the triage outcome
    for a human reviewer.
 
-5. Set audit_key to "audit:{claim_id}" (e.g. "audit:CLM-001").
+5. Set audit_key to "audit:{{claim_id}}" (e.g. "audit:CLM-001").
 
 6. Call write_audit_log with:
    - claim_id from the normalised claim
    - agent_name: "AuditSummaryAgent"
-   - decision: "final:{overall_status}" (e.g. "final:approved_for_processing")
+   - decision: "final:{{overall_status}}" (e.g. "final:approved_for_processing")
    - details: your full JSON final decision as a string
 
 7. Respond ONLY with a valid JSON object matching the FinalDecision schema.
@@ -63,5 +63,4 @@ Your tasks:
     tools=[write_audit_log],
     output_schema=FinalDecision,
     output_key="final_decision",
-    generate_content_config=types.GenerateContentConfig(temperature=0.1),
 )

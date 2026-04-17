@@ -19,8 +19,9 @@ from datetime import datetime
 
 import redis.asyncio as aioredis
 from dotenv import load_dotenv
+from pathlib import Path
 
-load_dotenv()
+load_dotenv(Path(__file__).parent.parent / ".env")
 
 _REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 

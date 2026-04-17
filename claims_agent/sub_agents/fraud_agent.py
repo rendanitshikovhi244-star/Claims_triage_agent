@@ -12,14 +12,14 @@ Writes audit log and stores output under 'fraud_assessment'.
 from __future__ import annotations
 
 from google.adk.agents import LlmAgent
-from google.genai import types
 
+from ..config import DEFAULT_MODEL
 from ..schemas import FraudAssessment
 from ..tools.redis_tools import push_fraud_queue, write_audit_log
 
 fraud_agent = LlmAgent(
     name="FraudAgent",
-    model="gemini-2.0-flash",
+    model=DEFAULT_MODEL,
     description=(
         "Analyses the claim for fraud indicators, scores risk, and routes "
         "suspicious claims to the fraud review queue."
@@ -60,7 +60,7 @@ Your tasks:
 6. Call write_audit_log with:
    - claim_id from the normalised claim
    - agent_name: "FraudAgent"
-   - decision: "fraud:{recommendation}" (e.g. "fraud:proceed" or "fraud:flag_for_review")
+   - decision: "fraud:{{recommendation}}" (e.g. "fraud:proceed" or "fraud:flag_for_review")
    - details: your full JSON fraud assessment as a string
 
 7. Respond ONLY with a valid JSON object matching the FraudAssessment schema.
@@ -69,5 +69,4 @@ Your tasks:
     tools=[push_fraud_queue, write_audit_log],
     output_schema=FraudAssessment,
     output_key="fraud_assessment",
-    generate_content_config=types.GenerateContentConfig(temperature=0.2),
 )

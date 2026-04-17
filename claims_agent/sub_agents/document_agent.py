@@ -12,15 +12,15 @@ Writes audit log and stores output under 'doc_check'.
 from __future__ import annotations
 
 from google.adk.agents import LlmAgent
-from google.genai import types
 
+from ..config import DEFAULT_MODEL
 from ..schemas import DocCheckResult
 from ..tools.document_tools import check_present_documents, get_required_documents
 from ..tools.redis_tools import write_audit_log
 
 document_agent = LlmAgent(
     name="DocumentAgent",
-    model="gemini-2.0-flash",
+    model=DEFAULT_MODEL,
     description=(
         "Identifies missing required documents for the claim and generates a "
         "document request message for the claimant."
@@ -48,8 +48,8 @@ Your tasks:
 4. Call write_audit_log with:
    - claim_id from the normalised claim
    - agent_name: "DocumentAgent"
-   - decision: "docs:complete" if all present, else "docs:missing:{count}" 
-     where {count} is the number of missing documents
+   - decision: "docs:complete" if all present, else "docs:missing:{{count}}" 
+     where {{count}} is the number of missing documents
    - details: your full JSON doc check result as a string
 
 5. Respond ONLY with a valid JSON object matching the DocCheckResult schema.
@@ -58,5 +58,4 @@ Your tasks:
     tools=[get_required_documents, check_present_documents, write_audit_log],
     output_schema=DocCheckResult,
     output_key="doc_check",
-    generate_content_config=types.GenerateContentConfig(temperature=0.1),
 )
