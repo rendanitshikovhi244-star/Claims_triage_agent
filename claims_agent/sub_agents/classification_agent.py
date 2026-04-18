@@ -2,48 +2,23 @@
 classification_agent.py
 -----------------------
 ClassificationAgent — second agent in the pipeline.
-
-Reads the normalised claim from session state (normalized_claim) and classifies:
-  - urgency: critical / high / medium / low
-  - claim_type: confirmed or corrected type
-
-Writes an audit log entry to Redis and stores its output under 'classification'.
+Model, description, and instruction are sourced from agent_configs.py.
 """
 
 from __future__ import annotations
 
 from google.adk.agents import LlmAgent
 
-from ..config import DEFAULT_MODEL
+from ..configs import AGENT_CONFIGS
 from ..tools.redis_tools import write_audit_log
+
+_cfg = AGENT_CONFIGS["ClassificationAgent"]
 
 classification_agent = LlmAgent(
     name="ClassificationAgent",
-    model=DEFAULT_MODEL,
-    description="Classifies claim urgency and type, then records the decision in the audit log.",
-    instruction="""You are an insurance claims triage specialist.
-
-The normalised claim is available in session state as {normalized_claim}.
-
-Your tasks:
-1. Classify the urgency of the claim:
-   - critical: life-threatening injuries, total loss, catastrophic event, or claim > $100,000
-   - high: significant financial impact, time-sensitive treatment, or claim $25,000–$100,000
-   - medium: standard processing, claim $5,000–$25,000
-   - low: minor claim, no time pressure, claim < $5,000
-
-2. Confirm or correct the claim_type (auto, health, property, life, liability) based on
-   the claim description. The intake agent may have guessed incorrectly.
-
-3. Call write_audit_log with:
-   - claim_id from the normalised claim
-   - agent_name: "ClassificationAgent"
-   - decision: the string "classified:" followed by the urgency value (e.g. "classified:high" or "classified:low")
-   - details: your full JSON classification result as a string
-
-4. Respond ONLY with a valid JSON object matching the Classification schema.
-   Do not include any explanation or markdown fences — raw JSON only.
-""",
+    model=_cfg.model,
+    description=_cfg.description,
+    instruction=_cfg.instruction,
     tools=[write_audit_log],
     output_key="classification",
 )
