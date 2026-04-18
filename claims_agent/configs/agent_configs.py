@@ -18,15 +18,25 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from .model_config import DEFAULT_MODEL
+from .model_config import MODEL_FAST, MODEL_MID, MODEL_MAIN
 
 # ---------------------------------------------------------------------------
-# Model
-# Swap this one line to change the LLM for every agent at once.
-# To use a different model for a specific agent, override cfg.model below.
+# Model assignments
+# Change a single line here to reroute an agent to a different tier.
 # ---------------------------------------------------------------------------
 
-MODEL = DEFAULT_MODEL
+_MODELS = {
+    # Structured JSON mapping + tool-call-and-map — minimal reasoning needed
+    "IntakeAgent":          MODEL_FAST,
+    "PolicyAgent":          MODEL_FAST,
+    # Rule-following with moderate reasoning
+    "ClassificationAgent":  MODEL_MID,
+    "DocumentAgent":        MODEL_MID,
+    "AuditSummaryAgent":    MODEL_MID,
+    # Multi-factor fraud scoring + natural conversation
+    "FraudAgent":           MODEL_MAIN,
+    "ClaimsAssistant":      MODEL_MAIN,
+}
 
 
 # ---------------------------------------------------------------------------
@@ -51,7 +61,7 @@ AGENT_CONFIGS: dict[str, AgentConfig] = {
     # 1. IntakeAgent
     # -----------------------------------------------------------------------
     "IntakeAgent": AgentConfig(
-        model=MODEL,
+        model=_MODELS["IntakeAgent"],
         description=(
             "Normalises raw insurance claim input (JSON or free-text) into a "
             "structured ClaimIntake record."
@@ -81,7 +91,7 @@ Do not include any explanation or markdown fences — raw JSON only.
     # 2. ClassificationAgent
     # -----------------------------------------------------------------------
     "ClassificationAgent": AgentConfig(
-        model=MODEL,
+        model=_MODELS["ClassificationAgent"],
         description="Classifies claim urgency and type, then records the decision in the audit log.",
         instruction="""You are an insurance claims triage specialist.
 
@@ -112,7 +122,7 @@ Your tasks:
     # 3. DocumentAgent
     # -----------------------------------------------------------------------
     "DocumentAgent": AgentConfig(
-        model=MODEL,
+        model=_MODELS["DocumentAgent"],
         description=(
             "Identifies missing required documents for the claim and generates a "
             "document request message for the claimant."
@@ -153,7 +163,7 @@ Your tasks:
     # 4. PolicyAgent
     # -----------------------------------------------------------------------
     "PolicyAgent": AgentConfig(
-        model=MODEL,
+        model=_MODELS["PolicyAgent"],
         description="Validates the claim against policy rules and identifies any violations.",
         instruction="""You are an insurance policy compliance analyst.
 
@@ -193,7 +203,7 @@ Your tasks:
     # 5. FraudAgent
     # -----------------------------------------------------------------------
     "FraudAgent": AgentConfig(
-        model=MODEL,
+        model=_MODELS["FraudAgent"],
         description=(
             "Analyses the claim for fraud indicators, scores risk, and routes "
             "suspicious claims to the fraud review queue."
@@ -247,7 +257,7 @@ Your tasks:
     # 6. AuditSummaryAgent
     # -----------------------------------------------------------------------
     "AuditSummaryAgent": AgentConfig(
-        model=MODEL,
+        model=_MODELS["AuditSummaryAgent"],
         description=(
             "Compiles the complete triage outcome into a FinalDecision and writes "
             "the audit summary entry to Redis."
@@ -294,7 +304,7 @@ Your tasks:
     # 7. ClaimsAssistant (conversational front-door agent)
     # -----------------------------------------------------------------------
     "ClaimsAssistant": AgentConfig(
-        model=MODEL,
+        model=_MODELS["ClaimsAssistant"],
         description=(
             "Conversational insurance claims assistant. Guides claimants through "
             "the full process: intake, document guidance, submission, resubmission, "

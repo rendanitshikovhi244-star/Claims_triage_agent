@@ -29,6 +29,7 @@ claims_agent/.env
 
 # ADK session database (generated at runtime)
 *.db
+logs/
 claims_sessions.db
 
 # Test cache

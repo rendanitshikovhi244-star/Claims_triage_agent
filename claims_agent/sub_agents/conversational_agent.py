@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from google.adk.agents import LlmAgent
 
-from ..configs import AGENT_CONFIGS
+from ..configs import AGENT_CONFIGS, agent_start_callback
 from ..tools.document_tools import get_required_documents
 from ..tools.pipeline_runner_tool import resubmit_with_documents, submit_claim
 from ..tools.redis_tools import get_audit_log
@@ -30,4 +30,5 @@ conversational_agent = LlmAgent(
         resubmit_with_documents,
         get_audit_log,
     ],
+    before_agent_callback=agent_start_callback,
 )

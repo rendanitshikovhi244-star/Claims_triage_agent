@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from google.adk.agents import LlmAgent
 
-from ..configs import AGENT_CONFIGS
+from ..configs import AGENT_CONFIGS, agent_start_callback
 from ..tools.document_tools import check_present_documents, get_required_documents
 from ..tools.redis_tools import write_audit_log
 
@@ -22,4 +22,5 @@ document_agent = LlmAgent(
     instruction=_cfg.instruction,
     tools=[get_required_documents, check_present_documents, write_audit_log],
     output_key="doc_check",
+    before_agent_callback=agent_start_callback,
 )

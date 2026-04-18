@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from google.adk.agents import LlmAgent
 
-from ..configs import AGENT_CONFIGS
+from ..configs import AGENT_CONFIGS, agent_start_callback
 from ..tools.redis_tools import push_fraud_queue, write_audit_log
 
 _cfg = AGENT_CONFIGS["FraudAgent"]
@@ -21,4 +21,5 @@ fraud_agent = LlmAgent(
     instruction=_cfg.instruction,
     tools=[push_fraud_queue, write_audit_log],
     output_key="fraud_assessment",
+    before_agent_callback=agent_start_callback,
 )

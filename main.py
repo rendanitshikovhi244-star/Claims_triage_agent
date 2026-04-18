@@ -37,6 +37,9 @@ from google.genai import types
 
 load_dotenv(Path(__file__).parent / "claims_agent" / ".env")
 
+from claims_agent.configs.logging_config import configure as _configure_logging
+_configure_logging()
+
 # Import the pipeline agent directly — the CLI bypasses the conversational front-door
 from claims_agent.agent import pipeline_agent
 

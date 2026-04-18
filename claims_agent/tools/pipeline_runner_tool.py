@@ -16,6 +16,7 @@ function to avoid a circular import:
 from __future__ import annotations
 
 import json
+import logging
 import os
 import uuid
 from datetime import date
@@ -29,6 +30,8 @@ from google.genai import types
 load_dotenv(Path(__file__).parent.parent / ".env")
 
 _REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+
+logger = logging.getLogger("claims_agent.pipeline")
 
 
 # ---------------------------------------------------------------------------
@@ -95,12 +98,39 @@ async def _run_pipeline_internal(claim_json: str) -> dict:
         parts=[types.Part(text=claim_json)],
     )
 
-    async for _ in runner.run_async(
+    logger.info("[Pipeline] Starting triage pipeline (session=%s)", session_id)
+
+    async for event in runner.run_async(
         user_id=user_id,
         session_id=session_id,
         new_message=message,
     ):
-        pass  # consume all events; state is written to session_service
+        if not event.author or event.author.startswith("_"):
+            continue
+        if event.content and event.content.parts:
+            for part in event.content.parts:
+                if hasattr(part, "function_call") and part.function_call:
+                    logger.info(
+                        "[Pipeline] %-25s → TOOL CALL  : %s(%s)",
+                        event.author,
+                        part.function_call.name,
+                        str(part.function_call.args)[:120].replace("\n", " "),
+                    )
+                elif hasattr(part, "function_response") and part.function_response:
+                    logger.info(
+                        "[Pipeline] %-25s ← TOOL RESULT: %s → %s",
+                        event.author,
+                        part.function_response.name,
+                        str(part.function_response.response)[:120].replace("\n", " "),
+                    )
+                elif hasattr(part, "text") and part.text and part.text.strip():
+                    logger.info(
+                        "[Pipeline] %-25s   OUTPUT     : %s",
+                        event.author,
+                        part.text[:200].replace("\n", " "),
+                    )
+
+    logger.info("[Pipeline] Pipeline complete (session=%s)", session_id)
 
     updated = await session_service.get_session(
         app_name="claims_triage_internal",
