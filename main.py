@@ -24,15 +24,21 @@ import os
 import sys
 from pathlib import Path
 
+# Ensure Unicode output works correctly on Windows terminals
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8")
+
 from dotenv import load_dotenv
 from google.adk.runners import Runner
-from google.adk.sessions import DatabaseSessionService
+from google.adk.sessions import InMemorySessionService
 from google.genai import types
 
 load_dotenv(Path(__file__).parent / "claims_agent" / ".env")
 
-# Import the root agent (SequentialAgent pipeline)
-from claims_agent.agent import root_agent
+# Import the pipeline agent directly — the CLI bypasses the conversational front-door
+from claims_agent.agent import pipeline_agent
 
 
 # ---------------------------------------------------------------------------
@@ -102,10 +108,10 @@ async def run_pipeline(claim_input: str) -> dict:
         The final session state dict after the pipeline completes.
     """
     db_url = os.getenv("SESSION_DB_URL", "sqlite+aiosqlite:///./claims_sessions.db")
-    session_service = DatabaseSessionService(db_url)
+    session_service = InMemorySessionService()
 
     runner = Runner(
-        agent=root_agent,
+        agent=pipeline_agent,
         app_name="claims_triage",
         session_service=session_service,
     )
