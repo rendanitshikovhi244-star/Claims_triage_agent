@@ -34,16 +34,21 @@ Inter-agent handoff via shared keys: `normalized_claim` → `classification` →
 Claims_triage_agent/
 ├── claims_agent/
 │   ├── __init__.py
-│   ├── agent.py                 ← root_agent (pipeline entry point)
-│   ├── config.py                ← model configuration
+│   ├── agent.py                 ← root_agent (conversational) + pipeline_agent (CLI)
 │   ├── .env                     ← secrets (never committed — see setup below)
+│   ├── configs/
+│   │   ├── agent_configs.py     ← central registry: prompts, model assignments per agent
+│   │   ├── logging_config.py    ← structured logging setup
+│   │   └── model_config.py      ← three-tier LiteLLM model instances
 │   ├── schemas/
 │   │   └── models.py            ← Pydantic models for all agent I/O
 │   ├── tools/
 │   │   ├── redis_tools.py       ← write_audit_log, push_fraud_queue, get_audit_log
 │   │   ├── document_tools.py    ← get_required_documents, check_present_documents
+│   │   ├── pipeline_runner_tool.py ← ADK tool that invokes the triage pipeline
 │   │   └── policy_tools.py      ← lookup_policy, validate_claim_against_policy
 │   └── sub_agents/
+│       ├── conversational_agent.py ← ClaimsAssistant (adk web / adk run entry point)
 │       ├── intake_agent.py
 │       ├── classification_agent.py
 │       ├── document_agent.py
@@ -89,25 +94,20 @@ cp .env.example claims_agent/.env        # macOS/Linux
 
 Edit `claims_agent/.env`:
 
-**Option A — HuggingFace (free tier)**
 ```env
+# HuggingFace API key (https://huggingface.co/settings/tokens)
 HUGGINGFACE_API_KEY=hf_your_key_here
-HF_MODEL=huggingface/Qwen/Qwen2.5-72B-Instruct
+
+# Three-tier model assignments — swap any line to use a different HF model
+HF_MODEL_FAST=huggingface/Qwen/Qwen2.5-14B-Instruct     # IntakeAgent, PolicyAgent
+HF_MODEL_MID=huggingface/meta-llama/Llama-3.3-70B-Instruct  # ClassificationAgent, DocumentAgent, AuditSummaryAgent
+HF_MODEL_MAIN=huggingface/MiniMaxAI/MiniMax-M2.7            # FraudAgent, ClaimsAssistant
+
 REDIS_URL=redis://localhost:6379/0
 SESSION_DB_URL=sqlite+aiosqlite:///./claims_sessions.db
 ```
 
-**Option B — Google Gemini (recommended for accuracy)**
-```env
-GOOGLE_API_KEY=your_key_from_aistudio.google.com
-GOOGLE_GENAI_USE_VERTEXAI=FALSE
-REDIS_URL=redis://localhost:6379/0
-SESSION_DB_URL=sqlite+aiosqlite:///./claims_sessions.db
-```
-
-Then update `claims_agent/config.py` to match:
-- HuggingFace: `LiteLlm(model=os.environ["HF_MODEL"])`
-- Gemini: `DEFAULT_MODEL = "gemini-2.5-flash"`
+Model assignments are managed in `claims_agent/configs/agent_configs.py`. To reroute an individual agent to a different tier, edit the `_MODELS` dictionary in that file.
 
 ### 4. Start Redis
 ```bash
@@ -159,6 +159,20 @@ docker exec -it redis-claims redis-cli LRANGE fraud_review_queue 0 -1
 ```bash
 # After running main.py, a claims_sessions.db file is created in the project root
 ```
+
+---
+
+## Model Tiers
+
+Agents are assigned to one of three cost-vs-capability tiers in `claims_agent/configs/agent_configs.py`:
+
+| Tier | Env var | Default model | Agents |
+|---|---|---|---|
+| FAST | `HF_MODEL_FAST` | Qwen2.5-14B-Instruct | IntakeAgent, PolicyAgent |
+| MID | `HF_MODEL_MID` | Llama-3.3-70B-Instruct | ClassificationAgent, DocumentAgent, AuditSummaryAgent |
+| MAIN | `HF_MODEL_MAIN` | MiniMax-M2.7 | FraudAgent, ClaimsAssistant |
+
+To swap a single agent to a different tier, change its entry in the `_MODELS` dict inside `agent_configs.py`.
 
 ---
 
