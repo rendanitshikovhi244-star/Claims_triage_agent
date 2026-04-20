@@ -3,51 +3,38 @@ policy_tools.py
 ---------------
 ADK tool functions for validating insurance policy rules against a submitted claim.
 
-In a real system these functions would query a policy database or API.
-Here they use a small hardcoded stub registry so the system runs end-to-end
-without external dependencies.
+Queries the shared PostgreSQL policies table (managed by policy_management_agent).
+Connection string is read from DATABASE_URL in claims_agent/.env.
+
+Expected table schema (created by policy_management_agent):
+  CREATE TABLE policies (
+      policy_number   TEXT PRIMARY KEY,
+      holder_name     TEXT,
+      is_active       BOOLEAN,
+      coverage_limit  NUMERIC,
+      deductible      NUMERIC,
+      covered_types   TEXT[],
+      start_date      DATE,
+      end_date        DATE
+  );
 """
 
 from __future__ import annotations
 
+import os
+from pathlib import Path
 from typing import List
 
-# ---------------------------------------------------------------------------
-# Stub policy registry — keyed by policy_number
-# ---------------------------------------------------------------------------
+import asyncpg
+from dotenv import load_dotenv
 
-_POLICY_DB: dict[str, dict] = {
-    "POL-1001": {
-        "is_active": True,
-        "coverage_limit": 50_000.0,
-        "deductible": 500.0,
-        "covered_claim_types": ["auto", "liability"],
-    },
-    "POL-1002": {
-        "is_active": True,
-        "coverage_limit": 200_000.0,
-        "deductible": 1_000.0,
-        "covered_claim_types": ["health"],
-    },
-    "POL-1003": {
-        "is_active": False,  # expired / lapsed policy
-        "coverage_limit": 100_000.0,
-        "deductible": 750.0,
-        "covered_claim_types": ["property", "liability"],
-    },
-    "POL-1004": {
-        "is_active": True,
-        "coverage_limit": 500_000.0,
-        "deductible": 2_500.0,
-        "covered_claim_types": ["life"],
-    },
-    "POL-9999": {
-        "is_active": True,
-        "coverage_limit": 10_000.0,
-        "deductible": 250.0,
-        "covered_claim_types": ["auto", "health", "property", "life", "liability"],
-    },
-}
+load_dotenv(Path(__file__).parent.parent / ".env")
+
+_DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/policies")
+
+
+async def _get_conn() -> asyncpg.Connection:
+    return await asyncpg.connect(_DATABASE_URL)
 
 
 # ---------------------------------------------------------------------------
@@ -55,9 +42,9 @@ _POLICY_DB: dict[str, dict] = {
 # ---------------------------------------------------------------------------
 
 
-def lookup_policy(policy_number: str) -> dict:
+async def lookup_policy(policy_number: str) -> dict:
     """
-    Retrieve policy details from the policy registry.
+    Retrieve policy details from the PostgreSQL policy database.
 
     Args:
         policy_number (str): The policyholder's policy number (e.g. 'POL-1001').
@@ -66,13 +53,30 @@ def lookup_policy(policy_number: str) -> dict:
         dict: status and policy details (is_active, coverage_limit, deductible,
               covered_claim_types) or an error if policy not found.
     """
-    policy = _POLICY_DB.get(policy_number.strip().upper())
-    if policy is None:
+    conn = await _get_conn()
+    try:
+        row = await conn.fetchrow(
+            "SELECT is_active, coverage_limit, deductible, covered_types "
+            "FROM policies WHERE policy_number = $1",
+            policy_number.strip().upper(),
+        )
+    finally:
+        await conn.close()
+
+    if row is None:
         return {
             "status": "error",
             "error": f"Policy '{policy_number}' not found in registry.",
         }
-    return {"status": "success", "policy_number": policy_number, **policy}
+
+    return {
+        "status": "success",
+        "policy_number": policy_number,
+        "is_active": row["is_active"],
+        "coverage_limit": float(row["coverage_limit"]),
+        "deductible": float(row["deductible"]),
+        "covered_claim_types": list(row["covered_types"]),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -80,7 +84,7 @@ def lookup_policy(policy_number: str) -> dict:
 # ---------------------------------------------------------------------------
 
 
-def validate_claim_against_policy(
+async def validate_claim_against_policy(
     policy_number: str,
     claim_type: str,
     amount_claimed: float,
@@ -91,7 +95,7 @@ def validate_claim_against_policy(
     Rules checked:
       1. Policy must be active (not lapsed/expired).
       2. Claim type must be covered under the policy.
-      3. Amount claimed must not exceed the coverage limit minus the deductible.
+      3. Amount claimed must not exceed the coverage limit.
 
     Args:
         policy_number (str): Policyholder's policy number.
@@ -101,7 +105,7 @@ def validate_claim_against_policy(
     Returns:
         dict: status, violations list, passed flag, coverage_limit, and deductible.
     """
-    lookup = lookup_policy(policy_number)
+    lookup = await lookup_policy(policy_number)
     if lookup["status"] == "error":
         return lookup
 
