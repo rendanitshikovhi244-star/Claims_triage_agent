@@ -20,7 +20,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 import sys
 from pathlib import Path
 
@@ -31,17 +30,13 @@ if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8")
 
 from dotenv import load_dotenv
-from google.adk.runners import Runner
-from google.adk.sessions import InMemorySessionService
-from google.genai import types
 
 load_dotenv(Path(__file__).parent / "claims_agent" / ".env")
 
 from claims_agent.configs.logging_config import configure as _configure_logging
 _configure_logging()
 
-# Import the pipeline agent directly — the CLI bypasses the conversational front-door
-from claims_agent.agent import pipeline_agent
+from claims_agent.agent import claims_triage_agent
 
 
 # ---------------------------------------------------------------------------
@@ -110,65 +105,16 @@ async def run_pipeline(claim_input: str) -> dict:
     Returns:
         The final session state dict after the pipeline completes.
     """
-    db_url = os.getenv("SESSION_DB_URL", "sqlite+aiosqlite:///./claims_sessions.db")
-    session_service = InMemorySessionService()
-
-    runner = Runner(
-        agent=pipeline_agent,
-        app_name="claims_triage",
-        session_service=session_service,
-    )
-
-    # Use the claim_id from JSON if available, otherwise generate one
     session_id = "session_" + str(hash(claim_input) % 10**9)
-    user_id = "claims_processor"
-
-    session = await session_service.create_session(
-        app_name="claims_triage",
-        user_id=user_id,
-        session_id=session_id,
-    )
-
-    message = types.Content(
-        role="user",
-        parts=[types.Part(text=claim_input)],
-    )
 
     print(f"\nRunning Claims Triage Pipeline...")
     print(f"Session ID: {session_id}\n")
 
-    final_state: dict = {}
-
-    async for event in runner.run_async(
-        user_id=user_id,
+    return await claims_triage_agent.process_claim(
+        claim_input=claim_input,
         session_id=session_id,
-        new_message=message,
-    ):
-        # Print agent activity as the pipeline progresses
-        if event.author and not event.author.startswith("_"):
-            if event.content and event.content.parts:
-                for part in event.content.parts:
-                    if hasattr(part, "function_call") and part.function_call:
-                        fc = part.function_call
-                        args_preview = str(fc.args)[:200].replace("\n", " ")
-                        print(f"  [{event.author}] → TOOL CALL: {fc.name}({args_preview})")
-                    elif hasattr(part, "function_response") and part.function_response:
-                        fr = part.function_response
-                        resp_preview = str(fr.response)[:300].replace("\n", " ")
-                        print(f"  [{event.author}] ← TOOL RESULT: {fr.name} → {resp_preview}")
-                    elif hasattr(part, "text") and part.text and part.text.strip():
-                        print(f"  [{event.author}] OUTPUT:\n{part.text}")
-
-    # Retrieve final session state
-    updated_session = await session_service.get_session(
-        app_name="claims_triage",
-        user_id=user_id,
-        session_id=session_id,
+        user_id="claims_processor",
     )
-    if updated_session:
-        final_state = dict(updated_session.state)
-
-    return final_state
 
 
 # ---------------------------------------------------------------------------

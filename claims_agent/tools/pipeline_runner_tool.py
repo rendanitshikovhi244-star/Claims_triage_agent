@@ -24,8 +24,6 @@ from pathlib import Path
 
 import redis.asyncio as aioredis
 from dotenv import load_dotenv
-from google.adk.runners import Runner
-from google.genai import types
 
 load_dotenv(Path(__file__).parent.parent / ".env")
 
@@ -72,72 +70,21 @@ def _format_result(state: dict) -> str:
 
 
 async def _run_pipeline_internal(claim_json: str) -> dict:
-    """Spin up a fresh in-memory runner and execute the SequentialAgent pipeline."""
-    # Lazy imports — avoid circular dependency and module-level SQLAlchemy side effects
-    from claims_agent.agent import pipeline_agent  # noqa: PLC0415
-    from google.adk.sessions import InMemorySessionService  # noqa: PLC0415
-
-    session_service = InMemorySessionService()
-    runner = Runner(
-        agent=pipeline_agent,
-        app_name="claims_triage_internal",
-        session_service=session_service,
-    )
+    """Delegate to ClaimsTriageAgent.process_claim and return the final state."""
+    # Lazy import — avoids circular dependency at module load time
+    from claims_agent.agent import claims_triage_agent  # noqa: PLC0415
 
     session_id = f"internal_{uuid.uuid4().hex[:12]}"
-    user_id = "conversational_agent"
-
-    await session_service.create_session(
-        app_name="claims_triage_internal",
-        user_id=user_id,
-        session_id=session_id,
-    )
-
-    message = types.Content(
-        role="user",
-        parts=[types.Part(text=claim_json)],
-    )
-
     logger.info("[Pipeline] Starting triage pipeline (session=%s)", session_id)
 
-    async for event in runner.run_async(
-        user_id=user_id,
+    state = await claims_triage_agent.process_claim(
+        claim_input=claim_json,
         session_id=session_id,
-        new_message=message,
-    ):
-        if not event.author or event.author.startswith("_"):
-            continue
-        if event.content and event.content.parts:
-            for part in event.content.parts:
-                if hasattr(part, "function_call") and part.function_call:
-                    logger.info(
-                        "[Pipeline] %-25s → TOOL CALL  : %s(%s)",
-                        event.author,
-                        part.function_call.name,
-                        str(part.function_call.args)[:120].replace("\n", " "),
-                    )
-                elif hasattr(part, "function_response") and part.function_response:
-                    logger.info(
-                        "[Pipeline] %-25s ← TOOL RESULT: %s → %s",
-                        event.author,
-                        part.function_response.name,
-                        str(part.function_response.response)[:120].replace("\n", " "),
-                    )
-                elif hasattr(part, "text") and part.text and part.text.strip():
-                    logger.info(
-                        "[Pipeline] %-25s   OUTPUT     : %s",
-                        event.author,
-                        part.text[:200].replace("\n", " "),
-                    )
+        user_id="conversational_agent",
+    )
 
     logger.info("[Pipeline] Pipeline complete (session=%s)", session_id)
-
-    updated = await session_service.get_session(
-        app_name="claims_triage_internal",
-        user_id=user_id,
-        session_id=session_id,
-    )
-    return dict(updated.state) if updated else {}
+    return state
 
 
 # ---------------------------------------------------------------------------
