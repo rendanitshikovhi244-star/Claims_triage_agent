@@ -1,6 +1,6 @@
 # Claims Triage Multi-Agent System
 
-An insurance claims triage pipeline built with **Google ADK** (Agent Development Kit), **Gemini / HuggingFace** LLMs, and **Redis** for audit logging.
+An insurance claims triage pipeline built with **Google ADK** (Agent Development Kit), **HuggingFace** LLMs via LiteLLM, **Redis** for audit logging, and **PostgreSQL** for policy data.
 
 ---
 
@@ -23,7 +23,11 @@ ClaimsTriagePipeline (SequentialAgent)
 | `audit:{claim_id}` | List | Per-agent audit entries (append-only, chronological) |
 | `fraud_review_queue` | List | Suspicious claims awaiting human fraud review |
 
-### ADK Session State (SQLite)
+### PostgreSQL — Policy Database
+The `PolicyAgent` queries a shared `policies` table in the `insurance` database (managed by `policy_management_agent`).
+Connection string: `DATABASE_URL` in `claims_agent/.env`.
+
+### ADK Session State (Redis)
 Inter-agent handoff via shared keys: `normalized_claim` → `classification` → `doc_check` + `policy_check` → `fraud_assessment` → `final_decision`
 
 ---
@@ -96,6 +100,7 @@ Edit `claims_agent/.env`:
 
 ```env
 # HuggingFace API key (https://huggingface.co/settings/tokens)
+# Token must have "Make calls to Inference Providers" permission enabled
 HUGGINGFACE_API_KEY=hf_your_key_here
 
 # Three-tier model assignments — swap any line to use a different HF model
@@ -103,16 +108,44 @@ HF_MODEL_FAST=huggingface/Qwen/Qwen2.5-14B-Instruct     # IntakeAgent, PolicyAge
 HF_MODEL_MID=huggingface/meta-llama/Llama-3.3-70B-Instruct  # ClassificationAgent, DocumentAgent, AuditSummaryAgent
 HF_MODEL_MAIN=huggingface/MiniMaxAI/MiniMax-M2.7            # FraudAgent, ClaimsAssistant
 
+# Infrastructure
 REDIS_URL=redis://localhost:6379/0
-SESSION_DB_URL=sqlite+aiosqlite:///./claims_sessions.db
+DATABASE_URL=postgresql://insurance_user:insurance_pass@localhost:5432/insurance
 ```
 
 Model assignments are managed in `claims_agent/configs/agent_configs.py`. To reroute an individual agent to a different tier, edit the `_MODELS` dictionary in that file.
+
+> **Note:** If a HuggingFace model returns a 400 error (`model_not_supported`), the model is not available through any provider enabled on your account. Go to [huggingface.co/settings/inference-providers](https://huggingface.co/settings/inference-providers) to enable providers, or set all three tiers to a model you have access to (e.g. `huggingface/MiniMaxAI/MiniMax-M2.7`).
 
 ### 4. Start Redis
 ```bash
 docker run -d -p 6379:6379 --name redis-claims redis:alpine
 ```
+
+### 5. Start PostgreSQL and create the policies table
+```bash
+# Start PostgreSQL (adjust credentials to match your DATABASE_URL)
+docker run -d -p 5432:5432 \
+  -e POSTGRES_USER=insurance_user \
+  -e POSTGRES_PASSWORD=insurance_pass \
+  -e POSTGRES_DB=insurance \
+  --name pg-policies postgres:16-alpine
+
+# Create the policies table
+docker exec -i pg-policies psql -U insurance_user -d insurance -c "
+CREATE TABLE IF NOT EXISTS policies (
+    policy_number   TEXT PRIMARY KEY,
+    holder_name     TEXT,
+    is_active       BOOLEAN,
+    coverage_limit  NUMERIC,
+    deductible      NUMERIC,
+    covered_types   TEXT[],
+    start_date      DATE,
+    end_date        DATE
+);"
+```
+
+Policies are managed by the companion `policy_management_agent` system. To run this project standalone, insert test rows manually or restore the stub by reverting `policy_tools.py`.
 
 ---
 
@@ -134,6 +167,9 @@ python main.py "My car was rear-ended on the highway. Policy POL-1001."
 ```bash
 adk web
 # Opens at http://localhost:8000
+
+# If port 8000 is already in use:
+adk web --port 8002
 ```
 
 ### Tests (no API key or Redis needed)
@@ -155,9 +191,16 @@ docker exec -it redis-claims redis-cli LRANGE audit:CLM-20260417-001 0 -1
 docker exec -it redis-claims redis-cli LRANGE fraud_review_queue 0 -1
 ```
 
-### Session state (SQLite)
+### Policy database
 ```bash
-# After running main.py, a claims_sessions.db file is created in the project root
+docker exec -it pg-policies psql -U insurance_user -d insurance -c "SELECT * FROM policies;"
+```
+
+### ADK web session DB (SQLite)
+```bash
+# ADK stores the web UI conversation history at:
+# claims_agent/.adk/session.db
+sqlite3 claims_agent/.adk/session.db "SELECT * FROM sessions;"
 ```
 
 ---
@@ -190,9 +233,11 @@ Final status is determined by `AuditSummaryAgent` using this priority order:
 
 ---
 
-## Policy Stub Registry
+## Policy Database
 
-The system ships with hardcoded test policies:
+Policies are stored in the `policies` table of the `insurance` PostgreSQL database and managed by the companion `policy_management_agent` system.
+
+The following test policies should be seeded for development:
 
 | Policy | Active | Coverage Limit | Deductible | Covers |
 |---|---|---|---|---|
@@ -201,3 +246,5 @@ The system ships with hardcoded test policies:
 | POL-1003 | ❌ lapsed | $100,000 | $750 | property, liability |
 | POL-1004 | ✅ | $500,000 | $2,500 | life |
 | POL-9999 | ✅ | $10,000 | $250 | all types |
+
+The `lookup_policy` and `validate_claim_against_policy` functions in `claims_agent/tools/policy_tools.py` query this table directly via `asyncpg`.
