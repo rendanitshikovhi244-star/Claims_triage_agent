@@ -65,6 +65,7 @@ Claims_triage_agent/
 │   └── claim_suspicious_003.json ← high fraud risk (day-1 claim, pressure language)
 ├── tests/
 │   └── test_pipeline.py         ← unit tests (no API key or Redis required)
+├── api.py                       ← FastAPI application (uvicorn api:app)
 ├── main.py                      ← CLI entrypoint
 ├── requirements.txt
 ├── pytest.ini
@@ -150,6 +151,64 @@ Policies are managed by the companion `policy_management_agent` system. To run t
 ---
 
 ## Running
+
+### REST API (FastAPI)
+```bash
+# Install new dependencies first (if not already done)
+pip install -r requirements.txt
+
+# Start the API server
+uvicorn api:app --reload
+# Server runs at http://localhost:8000
+# Interactive docs at http://localhost:8000/docs
+```
+
+#### Endpoints
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/health` | Liveness + Redis connectivity check |
+| `POST` | `/claims` | Submit a claim through the full pipeline |
+| `GET` | `/claims/{claim_id}/audit` | Fetch the ordered audit trail from Redis |
+| `GET` | `/fraud-queue` | Inspect claims awaiting fraud review |
+
+#### Example — structured submission
+```bash
+curl -X POST http://localhost:8000/claims \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "policy_number": "POL-1001",
+    "claimant_name": "Jane Smith",
+    "claim_type": "auto",
+    "incident_date": "2026-04-15",
+    "amount_claimed": 12500,
+    "description": "My car was rear-ended on the highway.",
+    "documents_provided": ["police_report", "photos_of_damage"]
+  }'
+```
+
+#### Example — free-text / raw JSON passthrough
+```bash
+curl -X POST http://localhost:8000/claims \
+  -H 'Content-Type: application/json' \
+  -d '{"raw_input": "My roof was destroyed in a storm. Policy POL-1001."}'
+```
+
+#### Example response
+```json
+{
+  "claim_id": "CLM-20260421-A1B2",
+  "session_id": "api_abc123def456",
+  "overall_status": "pending_documents",
+  "urgency": "high",
+  "claim_type": "auto",
+  "fraud_risk_score": 0.15,
+  "fraud_recommendation": "proceed",
+  "missing_docs": ["repair_estimate"],
+  "policy_violations": [],
+  "summary": "Claim CLM-20260421-A1B2 requires a repair estimate before processing."
+}
+```
 
 ### CLI — single claim
 ```bash
