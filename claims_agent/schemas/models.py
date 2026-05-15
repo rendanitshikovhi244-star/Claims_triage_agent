@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import List, Literal, Optional
+from typing import Any, List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -164,3 +164,80 @@ class FinalDecision(BaseModel):
     fraud_recommendation: str
     summary: str = Field(description="Human-readable summary of the triage outcome")
     audit_key: str = Field(description="Redis key where the full audit log is stored")
+
+
+# ---------------------------------------------------------------------------
+# API request / response schemas
+# ---------------------------------------------------------------------------
+
+
+class ClaimRequest(BaseModel):
+    """
+    Structured claim submission.
+
+    Either provide structured fields *or* a `raw_input` string (JSON or
+    free-text). When `raw_input` is present all other fields are ignored.
+    """
+
+    policy_number: Optional[str] = Field(default=None, examples=["POL-1001"])
+    claimant_name: Optional[str] = Field(default=None, examples=["Jane Smith"])
+    claim_type: Optional[Literal["auto", "health", "property", "life", "liability"]] = None
+    incident_date: Optional[str] = Field(
+        default=None,
+        description="Date of the incident in YYYY-MM-DD format",
+        examples=["2026-04-15"],
+    )
+    amount_claimed: Optional[float] = Field(default=None, ge=0, examples=[12500.0])
+    description: Optional[str] = Field(
+        default=None,
+        examples=["My car was rear-ended on the highway."],
+    )
+    documents_provided: List[str] = Field(
+        default_factory=list,
+        description="Document names already submitted with the claim.",
+        examples=[["police_report", "photos_of_damage"]],
+    )
+    raw_input: Optional[str] = Field(
+        default=None,
+        description=(
+            "Free-text or raw JSON claim input. "
+            "When provided, all other fields are ignored."
+        ),
+    )
+
+
+class TriageResponse(BaseModel):
+    claim_id: str
+    session_id: str
+    overall_status: str
+    urgency: Optional[str] = None
+    claim_type: Optional[str] = None
+    fraud_risk_score: Optional[float] = None
+    fraud_recommendation: Optional[str] = None
+    missing_docs: List[str] = []
+    policy_violations: List[str] = []
+    summary: Optional[str] = None
+
+
+class AuditEntryOut(BaseModel):
+    claim_id: str
+    agent_name: str
+    timestamp: str
+    decision: str
+    details: Any
+
+
+class AuditLogResponse(BaseModel):
+    claim_id: str
+    entry_count: int
+    entries: List[AuditEntryOut]
+
+
+class FraudQueueResponse(BaseModel):
+    queue_length: int
+    claim_ids: List[str]
+
+
+class HealthResponse(BaseModel):
+    status: Literal["ok", "degraded"]
+    redis: str

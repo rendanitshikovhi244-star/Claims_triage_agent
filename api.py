@@ -22,12 +22,11 @@ import uuid
 from contextlib import asynccontextmanager
 from datetime import date
 from pathlib import Path
-from typing import Any, List, Literal, Optional
+from typing import Literal
 
 import redis.asyncio as aioredis
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, Field
 
 load_dotenv(Path(__file__).parent / "claims_agent" / ".env")
 
@@ -36,11 +35,14 @@ from claims_agent.configs.logging_config import configure as _configure_logging
 _configure_logging()
 
 from claims_agent.agent import claims_triage_agent  # noqa: E402
-
-
-# ---------------------------------------------------------------------------
-# App factory
-# ---------------------------------------------------------------------------
+from claims_agent.schemas.models import (  # noqa: E402
+    AuditEntryOut,
+    AuditLogResponse,
+    ClaimRequest,
+    FraudQueueResponse,
+    HealthResponse,
+    TriageResponse,
+)
 
 
 @asynccontextmanager
@@ -66,83 +68,6 @@ _REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
 def _redis() -> aioredis.Redis:
     return aioredis.from_url(_REDIS_URL, decode_responses=True)
-
-
-# ---------------------------------------------------------------------------
-# Request / Response schemas
-# ---------------------------------------------------------------------------
-
-
-class ClaimRequest(BaseModel):
-    """
-    Structured claim submission.
-
-    Either provide structured fields *or* a `raw_input` string (JSON or
-    free-text). When `raw_input` is present all other fields are ignored.
-    """
-
-    policy_number: Optional[str] = Field(default=None, examples=["POL-1001"])
-    claimant_name: Optional[str] = Field(default=None, examples=["Jane Smith"])
-    claim_type: Optional[Literal["auto", "health", "property", "life", "liability"]] = None
-    incident_date: Optional[str] = Field(
-        default=None,
-        description="Date of the incident in YYYY-MM-DD format",
-        examples=["2026-04-15"],
-    )
-    amount_claimed: Optional[float] = Field(default=None, ge=0, examples=[12500.0])
-    description: Optional[str] = Field(
-        default=None,
-        examples=["My car was rear-ended on the highway."],
-    )
-    documents_provided: List[str] = Field(
-        default_factory=list,
-        description="Document names already submitted with the claim.",
-        examples=[["police_report", "photos_of_damage"]],
-    )
-    raw_input: Optional[str] = Field(
-        default=None,
-        description=(
-            "Free-text or raw JSON claim input. "
-            "When provided, all other fields are ignored."
-        ),
-    )
-
-
-class TriageResponse(BaseModel):
-    claim_id: str
-    session_id: str
-    overall_status: str
-    urgency: Optional[str] = None
-    claim_type: Optional[str] = None
-    fraud_risk_score: Optional[float] = None
-    fraud_recommendation: Optional[str] = None
-    missing_docs: List[str] = []
-    policy_violations: List[str] = []
-    summary: Optional[str] = None
-
-
-class AuditEntryOut(BaseModel):
-    claim_id: str
-    agent_name: str
-    timestamp: str
-    decision: str
-    details: Any
-
-
-class AuditLogResponse(BaseModel):
-    claim_id: str
-    entry_count: int
-    entries: List[AuditEntryOut]
-
-
-class FraudQueueResponse(BaseModel):
-    queue_length: int
-    claim_ids: List[str]
-
-
-class HealthResponse(BaseModel):
-    status: Literal["ok", "degraded"]
-    redis: str
 
 
 # ---------------------------------------------------------------------------
