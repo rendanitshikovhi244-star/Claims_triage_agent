@@ -142,10 +142,15 @@ Your tasks:
    - Build the list of required_docs (from get_required_documents)
    - Build the list of missing_docs (from check_present_documents)
    - Set all_docs_present to true if missing_docs is empty
-   - If documents are missing, write a professional, empathetic request_message
-     addressed to the claimant asking them to submit the missing items.
+   - If documents are missing, set the "request_message" field in your JSON
+     response to a professional, empathetic message addressed to the claimant
+     asking them to submit the missing items.
      Be specific — list each missing document by name.
-   - If all documents are present, set request_message to null.
+   - If all documents are present, set the "request_message" field to null.
+
+IMPORTANT: You have exactly three tools: get_required_documents,
+check_present_documents, and write_audit_log. Do NOT call any other tool.
+The "request_message" is a JSON field in your response, NOT a tool call.
 
 4. Call write_audit_log with:
    - claim_id from the normalised claim
