@@ -240,3 +240,9 @@ async def get_fraud_queue() -> FraudQueueResponse:
         await r.aclose()
 
     return FraudQueueResponse(queue_length=len(items), claim_ids=items)
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    uvicorn.run("api:app", host="0.0.0.0", port=8080, reload=True)
