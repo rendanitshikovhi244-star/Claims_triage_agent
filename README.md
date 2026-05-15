@@ -36,40 +36,43 @@ Inter-agent handoff via shared keys: `normalized_claim` → `classification` →
 
 ```
 Claims_triage_agent/
-├── claims_agent/
-│   ├── __init__.py
-│   ├── agent.py                 ← root_agent (conversational) + pipeline_agent (CLI)
-│   ├── .env                     ← secrets (never committed — see setup below)
-│   ├── configs/
-│   │   ├── agent_configs.py     ← central registry: prompts, model assignments per agent
-│   │   ├── logging_config.py    ← structured logging setup
-│   │   └── model_config.py      ← three-tier LiteLLM model instances
-│   ├── schemas/
-│   │   └── models.py            ← Pydantic models for all agent I/O
-│   ├── tools/
-│   │   ├── redis_tools.py       ← write_audit_log, push_fraud_queue, get_audit_log
-│   │   ├── document_tools.py    ← get_required_documents, check_present_documents
-│   │   ├── pipeline_runner_tool.py ← ADK tool that invokes the triage pipeline
-│   │   └── policy_tools.py      ← lookup_policy, validate_claim_against_policy
-│   └── sub_agents/
-│       ├── conversational_agent.py ← ClaimsAssistant (adk web / adk run entry point)
-│       ├── intake_agent.py
-│       ├── classification_agent.py
-│       ├── document_agent.py
-│       ├── policy_agent.py
-│       ├── fraud_agent.py
-│       └── audit_agent.py
-├── sample_claims/
-│   ├── claim_auto_001.json      ← standard auto claim (2 missing docs)
-│   ├── claim_health_002.json    ← health claim (1 missing doc)
-│   └── claim_suspicious_003.json ← high fraud risk (day-1 claim, pressure language)
-├── tests/
-│   └── test_pipeline.py         ← unit tests (no API key or Redis required)
-├── api.py                       ← FastAPI application (uvicorn api:app)
-├── main.py                      ← CLI entrypoint
+├── Source/
+│   └── Python/
+│       ├── src/
+│       │   ├── claims_agent/
+│       │   │   ├── __init__.py
+│       │   │   ├── agent.py                 ← root_agent (conversational) + pipeline_agent (CLI)
+│       │   │   ├── .env                     ← secrets (never committed — see setup below)
+│       │   │   ├── configs/
+│       │   │   │   ├── agent_configs.py     ← central registry: prompts, model assignments per agent
+│       │   │   │   ├── logging_config.py    ← structured logging setup
+│       │   │   │   └── model_config.py      ← three-tier LiteLLM model instances
+│       │   │   ├── schemas/
+│       │   │   │   └── models.py            ← Pydantic models for all agent & API I/O
+│       │   │   ├── tools/
+│       │   │   │   ├── redis_tools.py       ← write_audit_log, push_fraud_queue, get_audit_log
+│       │   │   │   ├── document_tools.py    ← get_required_documents, check_present_documents
+│       │   │   │   ├── pipeline_runner_tool.py ← ADK tool that invokes the triage pipeline
+│       │   │   │   └── policy_tools.py      ← lookup_policy, validate_claim_against_policy
+│       │   │   └── sub_agents/
+│       │   │       ├── conversational_agent.py ← ClaimsAssistant (adk web / adk run entry point)
+│       │   │       ├── intake_agent.py
+│       │   │       ├── classification_agent.py
+│       │   │       ├── document_agent.py
+│       │   │       ├── policy_agent.py
+│       │   │       ├── fraud_agent.py
+│       │   │       └── audit_agent.py
+│       │   ├── api.py                       ← FastAPI application (uvicorn api:app)
+│       │   └── main.py                      ← CLI entrypoint
+│       ├── tests/
+│       │   └── test_pipeline.py             ← unit tests (no API key or Redis required)
+│       └── sample_claims/
+│           ├── claim_auto_001.json          ← standard auto claim (2 missing docs)
+│           ├── claim_health_002.json        ← health claim (1 missing doc)
+│           └── claim_suspicious_003.json    ← high fraud risk (day-1 claim, pressure language)
 ├── requirements.txt
 ├── pytest.ini
-└── .env.example                 ← template — copy to claims_agent/.env and fill in
+└── .env.example                 ← template — copy to Source/Python/src/claims_agent/.env and fill in
 ```
 
 ---
@@ -93,11 +96,11 @@ pip install -r requirements.txt
 ### 3. Configure environment
 Copy the example template and fill in your credentials:
 ```bash
-copy .env.example claims_agent\.env      # Windows
-cp .env.example claims_agent/.env        # macOS/Linux
+copy .env.example Source\Python\src\claims_agent\.env      # Windows
+cp .env.example Source/Python/src/claims_agent/.env        # macOS/Linux
 ```
 
-Edit `claims_agent/.env`:
+Edit `Source/Python/src/claims_agent/.env`:
 
 ```env
 # HuggingFace API key (https://huggingface.co/settings/tokens)
@@ -114,7 +117,7 @@ REDIS_URL=redis://localhost:6379/0
 DATABASE_URL=postgresql://insurance_user:insurance_pass@localhost:5432/insurance
 ```
 
-Model assignments are managed in `claims_agent/configs/agent_configs.py`. To reroute an individual agent to a different tier, edit the `_MODELS` dictionary in that file.
+Model assignments are managed in `Source/Python/src/claims_agent/configs/agent_configs.py`. To reroute an individual agent to a different tier, edit the `_MODELS` dictionary in that file.
 
 > **Note:** If a HuggingFace model returns a 400 error (`model_not_supported`), the model is not available through any provider enabled on your account. Go to [huggingface.co/settings/inference-providers](https://huggingface.co/settings/inference-providers) to enable providers, or set all three tiers to a model you have access to (e.g. `huggingface/MiniMaxAI/MiniMax-M2.7`).
 
@@ -158,9 +161,13 @@ Policies are managed by the companion `policy_management_agent` system. To run t
 pip install -r requirements.txt
 
 # Start the API server
+cd Source/Python/src
+python api.py
+# Server runs at http://localhost:8080
+# Interactive docs at http://localhost:8080/docs
+
+# Or use uvicorn directly:
 uvicorn api:app --reload
-# Server runs at http://localhost:8000
-# Interactive docs at http://localhost:8000/docs
 ```
 
 #### Endpoints
@@ -174,7 +181,7 @@ uvicorn api:app --reload
 
 #### Example — structured submission
 ```bash
-curl -X POST http://localhost:8000/claims \
+curl -X POST http://localhost:8080/claims \
   -H 'Content-Type: application/json' \
   -d '{
     "policy_number": "POL-1001",
@@ -189,7 +196,7 @@ curl -X POST http://localhost:8000/claims \
 
 #### Example — free-text / raw JSON passthrough
 ```bash
-curl -X POST http://localhost:8000/claims \
+curl -X POST http://localhost:8080/claims \
   -H 'Content-Type: application/json' \
   -d '{"raw_input": "My roof was destroyed in a storm. Policy POL-1001."}'
 ```
@@ -212,8 +219,10 @@ curl -X POST http://localhost:8000/claims \
 
 ### CLI — single claim
 ```bash
+cd Source/Python/src
+
 # From a JSON file
-python main.py sample_claims/claim_auto_001.json
+python main.py ../sample_claims/claim_auto_001.json
 
 # From a JSON string
 python main.py '{"claim_id": "CLM-001", "policy_number": "POL-1001", ...}'
@@ -233,7 +242,8 @@ adk web --port 8002
 
 ### Tests (no API key or Redis needed)
 ```bash
-pytest tests/ -v
+# From the repo root (pytest.ini handles paths)
+pytest -v
 ```
 
 ---
@@ -258,15 +268,15 @@ docker exec -it pg-policies psql -U insurance_user -d insurance -c "SELECT * FRO
 ### ADK web session DB (SQLite)
 ```bash
 # ADK stores the web UI conversation history at:
-# claims_agent/.adk/session.db
-sqlite3 claims_agent/.adk/session.db "SELECT * FROM sessions;"
+# Source/Python/src/claims_agent/.adk/session.db
+sqlite3 Source/Python/src/claims_agent/.adk/session.db "SELECT * FROM sessions;"
 ```
 
 ---
 
 ## Model Tiers
 
-Agents are assigned to one of three cost-vs-capability tiers in `claims_agent/configs/agent_configs.py`:
+Agents are assigned to one of three cost-vs-capability tiers in `Source/Python/src/claims_agent/configs/agent_configs.py`:
 
 | Tier | Env var | Default model | Agents |
 |---|---|---|---|
@@ -274,7 +284,7 @@ Agents are assigned to one of three cost-vs-capability tiers in `claims_agent/co
 | MID | `HF_MODEL_MID` | Llama-3.3-70B-Instruct | ClassificationAgent, DocumentAgent, AuditSummaryAgent |
 | MAIN | `HF_MODEL_MAIN` | MiniMax-M2.7 | FraudAgent, ClaimsAssistant |
 
-To swap a single agent to a different tier, change its entry in the `_MODELS` dict inside `agent_configs.py`.
+To swap a single agent to a different tier, change its entry in the `_MODELS` dict inside `Source/Python/src/claims_agent/configs/agent_configs.py`.
 
 ---
 
@@ -306,4 +316,4 @@ The following test policies should be seeded for development:
 | POL-1004 | ✅ | $500,000 | $2,500 | life |
 | POL-9999 | ✅ | $10,000 | $250 | all types |
 
-The `lookup_policy` and `validate_claim_against_policy` functions in `claims_agent/tools/policy_tools.py` query this table directly via `asyncpg`.
+The `lookup_policy` and `validate_claim_against_policy` functions in `Source/Python/src/claims_agent/tools/policy_tools.py` query this table directly via `asyncpg`.

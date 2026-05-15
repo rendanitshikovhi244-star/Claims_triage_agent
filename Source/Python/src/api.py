@@ -10,6 +10,7 @@ Endpoints:
   GET  /fraud-queue              — inspect the fraud review queue
 
 Run with:
+    cd Source/Python/src
     uvicorn api:app --reload
     uvicorn api:app --host 0.0.0.0 --port 8080
 """
