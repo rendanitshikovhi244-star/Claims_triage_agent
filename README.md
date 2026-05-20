@@ -36,6 +36,14 @@ Inter-agent handoff via shared keys: `normalized_claim` → `classification` →
 
 ```
 Claims_triage_agent/
+├── DevOps/
+│   ├── docker/
+│   │   └── Dockerfile               ← container image for the FastAPI service
+│   └── pipelines/
+│       ├── build.pipeline            ← Jenkins: test, lint, build & push Docker image to ECR
+│       └── deploy.pipeline           ← Jenkins: deploy CloudFormation stack to AWS
+├── Infastructure/
+│   └── triage_agent.yaml            ← CloudFormation: VPC, ECS Fargate, ALB, Route 53, auto-scaling
 ├── Source/
 │   └── Python/
 │       ├── src/
@@ -317,3 +325,78 @@ The following test policies should be seeded for development:
 | POL-9999 | ✅ | $10,000 | $250 | all types |
 
 The `lookup_policy` and `validate_claim_against_policy` functions in `Source/Python/src/claims_agent/tools/policy_tools.py` query this table directly via `asyncpg`.
+
+---
+
+## Docker
+
+The service is containerized via [DevOps/docker/Dockerfile](DevOps/docker/Dockerfile):
+
+```bash
+# Build locally
+docker build -t claims-triage-agent -f DevOps/docker/Dockerfile .
+
+# Run locally (assumes Redis and PostgreSQL are accessible)
+docker run -p 8080:8080 --env-file Source/Python/src/claims_agent/.env claims-triage-agent
+```
+
+---
+
+## Infrastructure (AWS CloudFormation)
+
+The [Infastructure/triage_agent.yaml](Infastructure/triage_agent.yaml) template provisions:
+
+- **VPC** with public and private subnets across 2 AZs
+- **NAT Gateway** for outbound internet from private subnets
+- **Application Load Balancer** (public-facing, port 80)
+- **ECS Fargate Cluster** running the container image
+- **Auto-scaling** (CPU/memory targets, 1–4 tasks)
+- **Secrets Manager** integration for API keys
+- **Route 53 Private Hosted Zone** (`internal.example.com`) — no paid domain required
+
+### Key parameters
+
+| Parameter | Default | Description |
+|---|---|---|
+| `AssetGroup` | — | Environment: `dev`, `staging`, `prod` |
+| `ImageUrl` | — | ECR image URI (set by the deploy pipeline) |
+| `ContainerPort` | 8080 | Port inside the container |
+| `ContainerCpu` | 1024 | CPU units (1 vCPU) |
+| `ContainerMemory` | 4096 | Memory in MiB |
+| `DesiredCount` | 2 | Task replicas |
+
+---
+
+## CI/CD (Jenkins)
+
+Two pipelines live in `DevOps/pipelines/`:
+
+### Build — `build.pipeline`
+
+Triggered on code push. Stages:
+1. **Checkout** — pulls source from SCM
+2. **Run Tests** — `pytest` against the test suite
+3. **Lint** — `ruff check` on application source
+4. **Docker Build** — builds image tagged `<BUILD_NUMBER>-<SHORT_SHA>`
+5. **Push to ECR** — authenticates and pushes to AWS ECR
+
+### Deploy — `deploy.pipeline`
+
+Triggered manually (parameterized). Inputs:
+- `ENVIRONMENT` — `dev` / `staging` / `prod`
+- `IMAGE_TAG` — tag produced by the build pipeline
+
+Stages:
+1. **Validate Template** — `aws cloudformation validate-template`
+2. **Deploy CloudFormation** — `aws cloudformation deploy` with image URL override
+3. **Wait for Stabilization** — waits for stack create/update to complete
+4. **Verify Deployment** — health check against the ALB endpoint
+
+### Jenkins prerequisites
+
+| Credential ID | Type | Description |
+|---|---|---|
+| `aws-credentials` | AWS Access Key | IAM user with ECS, ECR, CloudFormation, Route 53 permissions |
+| `ecr-registry-url` | Secret text | ECR registry URL (e.g. `123456789012.dkr.ecr.us-east-1.amazonaws.com`) |
+
+The Jenkins agent must have **Docker** and **AWS CLI** installed.
