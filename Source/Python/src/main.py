@@ -31,7 +31,19 @@ if hasattr(sys.stderr, "reconfigure"):
 
 from dotenv import load_dotenv
 
+from claims_agent.utils.aws.credentials_loader import load_secrets_if_available
+
+# Fallback: load .env for local development
 load_dotenv(Path(__file__).parent / "claims_agent" / ".env")
+
+
+import os
+
+_secrets = load_secrets_if_available()
+for key in ("HF_MODEL_FAST", "HF_MODEL_MID", "HF_MODEL_MAIN", "HUGGINGFACE_API_KEY",
+            "REDIS_URL", "DATABASE_URL", "SESSION_DB_URL"):
+    if key in _secrets and key not in os.environ:
+        os.environ[key] = _secrets[key]
 
 from claims_agent.configs.logging_config import configure as _configure_logging
 _configure_logging()

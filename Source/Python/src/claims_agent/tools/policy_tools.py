@@ -22,15 +22,13 @@ Expected table schema (created by policy_management_agent):
 from __future__ import annotations
 
 import os
-from pathlib import Path
 from typing import List
 
 import asyncpg
-from dotenv import load_dotenv
 
-load_dotenv(Path(__file__).parent.parent / ".env")
+from claims_agent.configs.app_config import CONFIG
 
-_DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/insurance")
+_DATABASE_URL: str = os.getenv("DATABASE_URL", CONFIG.get("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/insurance"))
 
 
 async def _get_conn() -> asyncpg.Connection:

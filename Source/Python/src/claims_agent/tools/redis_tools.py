@@ -18,12 +18,10 @@ import os
 from datetime import datetime
 
 import redis.asyncio as aioredis
-from dotenv import load_dotenv
-from pathlib import Path
 
-load_dotenv(Path(__file__).parent.parent / ".env")
+from claims_agent.configs.app_config import CONFIG
 
-_REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+_REDIS_URL: str = os.getenv("REDIS_URL", CONFIG.get("REDIS_URL", "redis://localhost:6379/0"))
 
 
 def _get_redis() -> aioredis.Redis:

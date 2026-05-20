@@ -18,6 +18,7 @@ Run with:
 from __future__ import annotations
 
 import json
+import logging
 import os
 import uuid
 from contextlib import asynccontextmanager
@@ -29,7 +30,22 @@ import redis.asyncio as aioredis
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 
+from claims_agent.configs.app_config import CONFIG
+from claims_agent.utils.aws.credentials_loader import load_secrets_if_available
+
+# Fallback: load .env for local development
 load_dotenv(Path(__file__).parent / "claims_agent" / ".env")
+
+logger = logging.getLogger(__name__)
+
+
+_secrets = load_secrets_if_available()
+
+# Apply secrets to environment so downstream modules pick them up
+for key in ("HF_MODEL_FAST", "HF_MODEL_MID", "HF_MODEL_MAIN", "HUGGINGFACE_API_KEY",
+            "REDIS_URL", "DATABASE_URL", "SESSION_DB_URL"):
+    if key in _secrets and key not in os.environ:
+        os.environ[key] = _secrets[key]
 
 from claims_agent.configs.logging_config import configure as _configure_logging
 
@@ -64,7 +80,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-_REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+_REDIS_URL: str = _secrets.get("REDIS_URL", CONFIG.get("REDIS_URL", "redis://localhost:6379/0"))
 
 
 def _redis() -> aioredis.Redis:
