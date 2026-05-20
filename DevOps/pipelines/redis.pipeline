@@ -1,0 +1,135 @@
+pipeline {
+    agent any
+
+    parameters {
+        choice(name: 'ENVIRONMENT', choices: ['dev', 'staging', 'prod'], description: 'Target environment')
+        string(name: 'VPC_ID', description: 'VPC ID (from triage_agent stack output)')
+        string(name: 'PRIVATE_SUBNET_A', description: 'Private Subnet A ID')
+        string(name: 'PRIVATE_SUBNET_B', description: 'Private Subnet B ID')
+        string(name: 'ECS_SECURITY_GROUP_ID', description: 'ECS tasks security group ID (allowed to connect)')
+        choice(name: 'NODE_TYPE', choices: ['cache.t3.micro', 'cache.t3.small', 'cache.t3.medium', 'cache.r6g.large'], description: 'ElastiCache node type')
+        string(name: 'NUM_CACHE_CLUSTERS', defaultValue: '1', description: 'Number of cache nodes (1=dev, 2+=replication)')
+    }
+
+    environment {
+        AWS_REGION    = 'us-east-1'
+        STACK_NAME    = "claims-triage-redis-${params.ENVIRONMENT}"
+        TEMPLATE_FILE = 'Infastructure/redis.yaml'
+    }
+
+    options {
+        timestamps()
+        disableConcurrentBuilds()
+        timeout(time: 30, unit: 'MINUTES')
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Validate Template') {
+            steps {
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
+                                  credentialsId: 'aws-credentials']]) {
+                    sh """
+                        aws cloudformation validate-template \
+                            --region ${AWS_REGION} \
+                            --template-body file://${TEMPLATE_FILE}
+                    """
+                }
+            }
+        }
+
+        stage('Deploy Redis Stack') {
+            steps {
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
+                                  credentialsId: 'aws-credentials']]) {
+                    sh """
+                        aws cloudformation deploy \
+                            --region ${AWS_REGION} \
+                            --stack-name ${STACK_NAME} \
+                            --template-file ${TEMPLATE_FILE} \
+                            --no-fail-on-empty-changeset \
+                            --parameter-overrides \
+                                Environment=${params.ENVIRONMENT} \
+                                VpcId=${params.VPC_ID} \
+                                PrivateSubnetA=${params.PRIVATE_SUBNET_A} \
+                                PrivateSubnetB=${params.PRIVATE_SUBNET_B} \
+                                AllowedSecurityGroupId=${params.ECS_SECURITY_GROUP_ID} \
+                                NodeType=${params.NODE_TYPE} \
+                                NumCacheClusters=${params.NUM_CACHE_CLUSTERS}
+                    """
+                }
+            }
+        }
+
+        stage('Wait for Stack') {
+            steps {
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
+                                  credentialsId: 'aws-credentials']]) {
+                    sh """
+                        aws cloudformation wait stack-create-complete \
+                            --region ${AWS_REGION} \
+                            --stack-name ${STACK_NAME} 2>/dev/null || \
+                        aws cloudformation wait stack-update-complete \
+                            --region ${AWS_REGION} \
+                            --stack-name ${STACK_NAME}
+                    """
+                }
+            }
+        }
+
+        stage('Update Secrets Manager') {
+            steps {
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
+                                  credentialsId: 'aws-credentials']]) {
+                    sh """
+                        REDIS_URL=\$(aws cloudformation describe-stacks \
+                            --region ${AWS_REGION} \
+                            --stack-name ${STACK_NAME} \
+                            --query "Stacks[0].Outputs[?OutputKey=='RedisUrl'].OutputValue" \
+                            --output text)
+                        echo "Redis URL: \${REDIS_URL}"
+
+                        SECRET_ID="claims-triage-agent-secret-${params.ENVIRONMENT}"
+
+                        # Get current secret value, update REDIS_URL, and write back
+                        CURRENT=\$(aws secretsmanager get-secret-value \
+                            --region ${AWS_REGION} \
+                            --secret-id \${SECRET_ID} \
+                            --query SecretString --output text)
+
+                        UPDATED=\$(echo "\${CURRENT}" | python3 -c "
+import sys, json
+secret = json.load(sys.stdin)
+secret['REDIS_URL'] = '\${REDIS_URL}'
+print(json.dumps(secret))
+")
+
+                        aws secretsmanager put-secret-value \
+                            --region ${AWS_REGION} \
+                            --secret-id \${SECRET_ID} \
+                            --secret-string "\${UPDATED}"
+
+                        echo "REDIS_URL written to Secrets Manager (\${SECRET_ID})"
+                    """
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "Redis cluster deployed for ${params.ENVIRONMENT}."
+        }
+        failure {
+            echo "Redis deployment failed for ${params.ENVIRONMENT}."
+        }
+        always {
+            cleanWs()
+        }
+    }
+}

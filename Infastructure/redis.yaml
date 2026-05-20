@@ -1,0 +1,134 @@
+---
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: >
+  ElastiCache Redis cluster for the Claims Triage Agent.
+  Provides the audit log and fraud review queue backend.
+
+Parameters:
+
+  Environment:
+    Description: Environment prefix (dev, staging, prod)
+    Type: String
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+
+  VpcId:
+    Description: VPC ID where the Redis cluster will be deployed
+    Type: AWS::EC2::VPC::Id
+
+  PrivateSubnetA:
+    Description: First private subnet ID
+    Type: AWS::EC2::Subnet::Id
+
+  PrivateSubnetB:
+    Description: Second private subnet ID
+    Type: AWS::EC2::Subnet::Id
+
+  AllowedSecurityGroupId:
+    Description: Security group ID allowed to connect to Redis (e.g. ECS tasks SG)
+    Type: AWS::EC2::SecurityGroup::Id
+
+  NodeType:
+    Description: ElastiCache node instance type
+    Type: String
+    Default: cache.t3.micro
+    AllowedValues:
+      - cache.t3.micro
+      - cache.t3.small
+      - cache.t3.medium
+      - cache.r6g.large
+
+  NumCacheClusters:
+    Description: Number of cache nodes (1 for dev, 2+ for replication)
+    Type: Number
+    Default: 1
+
+  EngineVersion:
+    Description: Redis engine version
+    Type: String
+    Default: "7.1"
+
+
+Resources:
+
+  RedisSubnetGroup:
+    Type: AWS::ElastiCache::SubnetGroup
+    Properties:
+      Description: !Sub "Redis subnet group for Claims Triage (${Environment})"
+      SubnetIds:
+        - !Ref PrivateSubnetA
+        - !Ref PrivateSubnetB
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  RedisSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub "Redis SG - Claims Triage (${Environment})"
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 6379
+          ToPort: 6379
+          SourceSecurityGroupId: !Ref AllowedSecurityGroupId
+      Tags:
+        - Key: Name
+          Value: !Sub "claims-triage-redis-sg-${Environment}"
+        - Key: Environment
+          Value: !Ref Environment
+
+  RedisReplicationGroup:
+    Type: AWS::ElastiCache::ReplicationGroup
+    Properties:
+      ReplicationGroupDescription: !Sub "Claims Triage Redis (${Environment})"
+      Engine: redis
+      EngineVersion: !Ref EngineVersion
+      CacheNodeType: !Ref NodeType
+      NumCacheClusters: !Ref NumCacheClusters
+      CacheSubnetGroupName: !Ref RedisSubnetGroup
+      SecurityGroupIds:
+        - !Ref RedisSecurityGroup
+      AutomaticFailoverEnabled: !If [IsMultiNode, true, false]
+      AtRestEncryptionEnabled: true
+      TransitEncryptionEnabled: true
+      Port: 6379
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: ClaimsTriageAgent
+
+
+Conditions:
+  IsMultiNode: !Not [!Equals [!Ref NumCacheClusters, 1]]
+
+
+Outputs:
+
+  RedisEndpoint:
+    Description: Redis primary endpoint address
+    Value: !GetAtt RedisReplicationGroup.PrimaryEndPoint.Address
+    Export:
+      Name: !Sub "${AWS::StackName}-RedisEndpoint"
+
+  RedisPort:
+    Description: Redis port
+    Value: !GetAtt RedisReplicationGroup.PrimaryEndPoint.Port
+    Export:
+      Name: !Sub "${AWS::StackName}-RedisPort"
+
+  RedisUrl:
+    Description: Full Redis connection URL (use this in Secrets Manager)
+    Value: !Sub "rediss://${RedisReplicationGroup.PrimaryEndPoint.Address}:${RedisReplicationGroup.PrimaryEndPoint.Port}/0"
+    Export:
+      Name: !Sub "${AWS::StackName}-RedisUrl"
+
+  RedisSecurityGroupId:
+    Description: Security group ID for the Redis cluster
+    Value: !Ref RedisSecurityGroup
+    Export:
+      Name: !Sub "${AWS::StackName}-RedisSecurityGroupId"
