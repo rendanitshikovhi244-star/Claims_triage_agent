@@ -1,0 +1,109 @@
+pipeline {
+    agent any
+
+    parameters {
+        choice(name: 'ENVIRONMENT', choices: ['dev', 'staging', 'prod'], description: 'Target environment')
+        string(name: 'IMAGE_TAG', defaultValue: 'latest', description: 'Docker image tag to deploy')
+    }
+
+    environment {
+        AWS_REGION      = 'us-east-1'
+        ECR_REGISTRY    = credentials('ecr-registry-url')
+        ECR_REPO        = 'claims-triage-agent'
+        ENVIRONMENT     = "${params.ENVIRONMENT}"
+        IMAGE_TAG       = "${params.IMAGE_TAG}"
+        STACK_NAME      = "claims-triage-agent-${params.ENVIRONMENT}"
+        TEMPLATE_FILE   = 'Infastructure/triage_agent.yaml'
+    }
+
+    options {
+        timestamps()
+        disableConcurrentBuilds()
+        timeout(time: 45, unit: 'MINUTES')
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Validate Template') {
+            steps {
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
+                                  credentialsId: 'aws-credentials']]) {
+                    bat """
+                        aws cloudformation validate-template ^
+                            --region %AWS_REGION% ^
+                            --template-body file://%TEMPLATE_FILE%
+                    """
+                }
+            }
+        }
+
+        stage('Deploy CloudFormation') {
+            steps {
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
+                                  credentialsId: 'aws-credentials']]) {
+                    bat """
+                        aws cloudformation deploy ^
+                            --region %AWS_REGION% ^
+                            --stack-name %STACK_NAME% ^
+                            --template-file %TEMPLATE_FILE% ^
+                            --capabilities CAPABILITY_NAMED_IAM ^
+                            --no-fail-on-empty-changeset ^
+                            --parameter-overrides ^
+                                AssetGroup=%ENVIRONMENT% ^
+                                ImageUrl=%ECR_REGISTRY%/%ECR_REPO%:%IMAGE_TAG%
+                    """
+                }
+            }
+        }
+
+        stage('Wait for Stabilization') {
+            steps {
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
+                                  credentialsId: 'aws-credentials']]) {
+                    bat """
+                        aws cloudformation wait stack-update-complete ^
+                            --region %AWS_REGION% ^
+                            --stack-name %STACK_NAME% || ^
+                        aws cloudformation wait stack-create-complete ^
+                            --region %AWS_REGION% ^
+                            --stack-name %STACK_NAME%
+                    """
+                }
+            }
+        }
+
+        stage('Verify Deployment') {
+            steps {
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
+                                  credentialsId: 'aws-credentials']]) {
+                    bat """
+                        for /f "tokens=*" %%i in ('aws cloudformation describe-stacks ^
+                            --region %AWS_REGION% ^
+                            --stack-name %STACK_NAME% ^
+                            --query "Stacks[0].Outputs[?OutputKey=='LoadBalancerDNS'].OutputValue" ^
+                            --output text') do set ALB_URL=%%i
+                        echo ALB URL: %ALB_URL%
+                        curl -f http://%ALB_URL%/health || (echo Health check failed && exit /b 1)
+                    """
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "Deployment to %ENVIRONMENT% successful (image tag: %IMAGE_TAG%)"
+        }
+        failure {
+            echo "Deployment to %ENVIRONMENT% failed."
+        }
+        always {
+            cleanWs()
+        }
+    }
+}
