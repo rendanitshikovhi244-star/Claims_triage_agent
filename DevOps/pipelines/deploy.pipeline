@@ -10,6 +10,8 @@ pipeline {
         AWS_REGION      = 'us-east-1'
         ECR_REGISTRY    = credentials('ecr-registry-url')
         ECR_REPO        = 'claims-triage-agent'
+        ENVIRONMENT     = "${params.ENVIRONMENT}"
+        IMAGE_TAG       = "${params.IMAGE_TAG}"
         STACK_NAME      = "claims-triage-agent-${params.ENVIRONMENT}"
         TEMPLATE_FILE   = 'Infastructure/triage_agent.yaml'
     }
@@ -31,10 +33,10 @@ pipeline {
             steps {
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
                                   credentialsId: 'aws-credentials']]) {
-                    sh """
-                        aws cloudformation validate-template \
-                            --region ${AWS_REGION} \
-                            --template-body file://${TEMPLATE_FILE}
+                    bat """
+                        aws cloudformation validate-template ^
+                            --region %AWS_REGION% ^
+                            --template-body file://%TEMPLATE_FILE%
                     """
                 }
             }
@@ -44,16 +46,16 @@ pipeline {
             steps {
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
                                   credentialsId: 'aws-credentials']]) {
-                    sh """
-                        aws cloudformation deploy \
-                            --region ${AWS_REGION} \
-                            --stack-name ${STACK_NAME} \
-                            --template-file ${TEMPLATE_FILE} \
-                            --capabilities CAPABILITY_NAMED_IAM \
-                            --no-fail-on-empty-changeset \
-                            --parameter-overrides \
-                                AssetGroup=${params.ENVIRONMENT} \
-                                ImageUrl=${ECR_REGISTRY}/${ECR_REPO}:${params.IMAGE_TAG}
+                    bat """
+                        aws cloudformation deploy ^
+                            --region %AWS_REGION% ^
+                            --stack-name %STACK_NAME% ^
+                            --template-file %TEMPLATE_FILE% ^
+                            --capabilities CAPABILITY_NAMED_IAM ^
+                            --no-fail-on-empty-changeset ^
+                            --parameter-overrides ^
+                                AssetGroup=%ENVIRONMENT% ^
+                                ImageUrl=%ECR_REGISTRY%/%ECR_REPO%:%IMAGE_TAG%
                     """
                 }
             }
@@ -63,13 +65,13 @@ pipeline {
             steps {
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
                                   credentialsId: 'aws-credentials']]) {
-                    sh """
-                        aws cloudformation wait stack-update-complete \
-                            --region ${AWS_REGION} \
-                            --stack-name ${STACK_NAME} || \
-                        aws cloudformation wait stack-create-complete \
-                            --region ${AWS_REGION} \
-                            --stack-name ${STACK_NAME}
+                    bat """
+                        aws cloudformation wait stack-update-complete ^
+                            --region %AWS_REGION% ^
+                            --stack-name %STACK_NAME% || ^
+                        aws cloudformation wait stack-create-complete ^
+                            --region %AWS_REGION% ^
+                            --stack-name %STACK_NAME%
                     """
                 }
             }
@@ -79,14 +81,14 @@ pipeline {
             steps {
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
                                   credentialsId: 'aws-credentials']]) {
-                    sh """
-                        ALB_URL=\$(aws cloudformation describe-stacks \
-                            --region ${AWS_REGION} \
-                            --stack-name ${STACK_NAME} \
-                            --query "Stacks[0].Outputs[?OutputKey=='LoadBalancerDNS'].OutputValue" \
-                            --output text)
-                        echo "ALB URL: \${ALB_URL}"
-                        curl -sf "http://\${ALB_URL}/health" || (echo 'Health check failed' && exit 1)
+                    bat """
+                        for /f "tokens=*" %%i in ('aws cloudformation describe-stacks ^
+                            --region %AWS_REGION% ^
+                            --stack-name %STACK_NAME% ^
+                            --query "Stacks[0].Outputs[?OutputKey=='LoadBalancerDNS'].OutputValue" ^
+                            --output text') do set ALB_URL=%%i
+                        echo ALB URL: %ALB_URL%
+                        curl -f http://%ALB_URL%/health || (echo Health check failed && exit /b 1)
                     """
                 }
             }
@@ -95,10 +97,10 @@ pipeline {
 
     post {
         success {
-            echo "Deployment to ${params.ENVIRONMENT} successful (image tag: ${params.IMAGE_TAG})"
+            echo "Deployment to %ENVIRONMENT% successful (image tag: %IMAGE_TAG%)"
         }
         failure {
-            echo "Deployment to ${params.ENVIRONMENT} failed."
+            echo "Deployment to %ENVIRONMENT% failed."
         }
         always {
             cleanWs()

@@ -12,9 +12,16 @@ pipeline {
     }
 
     environment {
-        AWS_REGION    = 'us-east-1'
-        STACK_NAME    = "claims-triage-redis-${params.ENVIRONMENT}"
-        TEMPLATE_FILE = 'Infastructure/redis.yaml'
+        AWS_REGION              = 'us-east-1'
+        ENVIRONMENT             = "${params.ENVIRONMENT}"
+        VPC_ID                  = "${params.VPC_ID}"
+        PRIVATE_SUBNET_A        = "${params.PRIVATE_SUBNET_A}"
+        PRIVATE_SUBNET_B        = "${params.PRIVATE_SUBNET_B}"
+        ECS_SECURITY_GROUP_ID   = "${params.ECS_SECURITY_GROUP_ID}"
+        NODE_TYPE               = "${params.NODE_TYPE}"
+        NUM_CACHE_CLUSTERS      = "${params.NUM_CACHE_CLUSTERS}"
+        STACK_NAME              = "claims-triage-redis-${params.ENVIRONMENT}"
+        TEMPLATE_FILE           = 'Infastructure/redis.yaml'
     }
 
     options {
@@ -34,10 +41,10 @@ pipeline {
             steps {
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
                                   credentialsId: 'aws-credentials']]) {
-                    sh """
-                        aws cloudformation validate-template \
-                            --region ${AWS_REGION} \
-                            --template-body file://${TEMPLATE_FILE}
+                    bat """
+                        aws cloudformation validate-template ^
+                            --region %AWS_REGION% ^
+                            --template-body file://%TEMPLATE_FILE%
                     """
                 }
             }
@@ -47,20 +54,20 @@ pipeline {
             steps {
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
                                   credentialsId: 'aws-credentials']]) {
-                    sh """
-                        aws cloudformation deploy \
-                            --region ${AWS_REGION} \
-                            --stack-name ${STACK_NAME} \
-                            --template-file ${TEMPLATE_FILE} \
-                            --no-fail-on-empty-changeset \
-                            --parameter-overrides \
-                                Environment=${params.ENVIRONMENT} \
-                                VpcId=${params.VPC_ID} \
-                                PrivateSubnetA=${params.PRIVATE_SUBNET_A} \
-                                PrivateSubnetB=${params.PRIVATE_SUBNET_B} \
-                                AllowedSecurityGroupId=${params.ECS_SECURITY_GROUP_ID} \
-                                NodeType=${params.NODE_TYPE} \
-                                NumCacheClusters=${params.NUM_CACHE_CLUSTERS}
+                    bat """
+                        aws cloudformation deploy ^
+                            --region %AWS_REGION% ^
+                            --stack-name %STACK_NAME% ^
+                            --template-file %TEMPLATE_FILE% ^
+                            --no-fail-on-empty-changeset ^
+                            --parameter-overrides ^
+                                Environment=%ENVIRONMENT% ^
+                                VpcId=%VPC_ID% ^
+                                PrivateSubnetA=%PRIVATE_SUBNET_A% ^
+                                PrivateSubnetB=%PRIVATE_SUBNET_B% ^
+                                AllowedSecurityGroupId=%ECS_SECURITY_GROUP_ID% ^
+                                NodeType=%NODE_TYPE% ^
+                                NumCacheClusters=%NUM_CACHE_CLUSTERS%
                     """
                 }
             }
@@ -70,13 +77,13 @@ pipeline {
             steps {
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
                                   credentialsId: 'aws-credentials']]) {
-                    sh """
-                        aws cloudformation wait stack-create-complete \
-                            --region ${AWS_REGION} \
-                            --stack-name ${STACK_NAME} 2>/dev/null || \
-                        aws cloudformation wait stack-update-complete \
-                            --region ${AWS_REGION} \
-                            --stack-name ${STACK_NAME}
+                    bat """
+                        aws cloudformation wait stack-create-complete ^
+                            --region %AWS_REGION% ^
+                            --stack-name %STACK_NAME% 2>nul || ^
+                        aws cloudformation wait stack-update-complete ^
+                            --region %AWS_REGION% ^
+                            --stack-name %STACK_NAME%
                     """
                 }
             }
@@ -86,35 +93,31 @@ pipeline {
             steps {
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
                                   credentialsId: 'aws-credentials']]) {
-                    sh """
-                        REDIS_URL=\$(aws cloudformation describe-stacks \
-                            --region ${AWS_REGION} \
-                            --stack-name ${STACK_NAME} \
-                            --query "Stacks[0].Outputs[?OutputKey=='RedisUrl'].OutputValue" \
-                            --output text)
-                        echo "Redis URL: \${REDIS_URL}"
+                    bat """
+                        for /f "tokens=*" %%i in ('aws cloudformation describe-stacks ^
+                            --region %AWS_REGION% ^
+                            --stack-name %STACK_NAME% ^
+                            --query "Stacks[0].Outputs[?OutputKey=='RedisUrl'].OutputValue" ^
+                            --output text') do set REDIS_URL=%%i
+                        echo Redis URL: %REDIS_URL%
 
-                        SECRET_ID="claims-triage-agent-secret-${params.ENVIRONMENT}"
+                        set SECRET_ID=claims-triage-agent-secret-%ENVIRONMENT%
 
-                        # Get current secret value, update REDIS_URL, and write back
-                        CURRENT=\$(aws secretsmanager get-secret-value \
-                            --region ${AWS_REGION} \
-                            --secret-id \${SECRET_ID} \
-                            --query SecretString --output text)
+                        for /f "tokens=*" %%j in ('aws secretsmanager get-secret-value ^
+                            --region %AWS_REGION% ^
+                            --secret-id %SECRET_ID% ^
+                            --query SecretString --output text') do set CURRENT=%%j
 
-                        UPDATED=\$(echo "\${CURRENT}" | python3 -c "
-import sys, json
-secret = json.load(sys.stdin)
-secret['REDIS_URL'] = '\${REDIS_URL}'
-print(json.dumps(secret))
-")
+                        (echo %CURRENT%) | python -c "import sys, json; secret = json.load(sys.stdin); secret['REDIS_URL'] = '%REDIS_URL%'; print(json.dumps(secret))" > temp_secret.json
+                        set /p UPDATED= < temp_secret.json
+                        del temp_secret.json
 
-                        aws secretsmanager put-secret-value \
-                            --region ${AWS_REGION} \
-                            --secret-id \${SECRET_ID} \
-                            --secret-string "\${UPDATED}"
+                        aws secretsmanager put-secret-value ^
+                            --region %AWS_REGION% ^
+                            --secret-id %SECRET_ID% ^
+                            --secret-string "%UPDATED%"
 
-                        echo "REDIS_URL written to Secrets Manager (\${SECRET_ID})"
+                        echo REDIS_URL written to Secrets Manager (%SECRET_ID%)
                     """
                 }
             }
@@ -123,10 +126,10 @@ print(json.dumps(secret))
 
     post {
         success {
-            echo "Redis cluster deployed for ${params.ENVIRONMENT}."
+            echo "Redis cluster deployed for %ENVIRONMENT%."
         }
         failure {
-            echo "Redis deployment failed for ${params.ENVIRONMENT}."
+            echo "Redis deployment failed for %ENVIRONMENT%."
         }
         always {
             cleanWs()
