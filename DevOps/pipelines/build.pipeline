@@ -24,7 +24,7 @@ pipeline {
 
         stage('Run Tests') {
             steps {
-                bat '''
+                sh '''
                     python -m venv .venv
                     call .venv\Scripts\activate.bat
                     pip install -r requirements.txt
@@ -35,7 +35,7 @@ pipeline {
 
         stage('Lint') {
             steps {
-                bat '''
+                sh '''
                     call .venv\Scripts\activate.bat
                     pip install ruff
                     ruff check Source/Python/src/
@@ -45,7 +45,7 @@ pipeline {
 
         stage('Docker Build') {
             steps {
-                bat """
+                sh """
                     docker build -t %ECR_REGISTRY%/%ECR_REPO%:%IMAGE_TAG% ^
                                  -t %ECR_REGISTRY%/%ECR_REPO%:latest ^
                                  -f %DOCKERFILE_PATH% .
@@ -57,7 +57,7 @@ pipeline {
             steps {
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
                                   credentialsId: 'aws-credentials']]) {
-                    bat """
+                    sh """
                         for /f "tokens=*" %%i in ('aws ecr get-login-password --region %AWS_REGION%') do docker login --username AWS --password-stdin %ECR_REGISTRY% < NUL
                         docker push %ECR_REGISTRY%/%ECR_REPO%:%IMAGE_TAG%
                         docker push %ECR_REGISTRY%/%ECR_REPO%:latest
