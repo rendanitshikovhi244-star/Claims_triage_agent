@@ -13,7 +13,7 @@ pipeline {
         ENVIRONMENT     = "${params.ENVIRONMENT}"
         IMAGE_TAG       = "${params.IMAGE_TAG}"
         STACK_NAME      = "claims-triage-agent-${params.ENVIRONMENT}"
-        TEMPLATE_FILE   = 'Infastructure/triage_agent.yaml'
+        TEMPLATE_FILE   = 'Infastructure/triage_agent.yaml' // Keep matching your spelling repo layout
     }
 
     options {
@@ -66,12 +66,15 @@ pipeline {
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
                                   credentialsId: 'aws-credentials']]) {
                     sh """
-                        aws cloudformation wait stack-update-complete \
-                            --region ${AWS_REGION} \
-                            --stack-name ${STACK_NAME} || \
-                        aws cloudformation wait stack-create-complete \
-                            --region ${AWS_REGION} \
-                            --stack-name ${STACK_NAME}
+                        # Dynamically check if stack exists to choose correct waiter block
+                        if aws cloudformation describe-stacks --region ${AWS_REGION} --stack-name ${STACK_NAME} >/dev/null 2>&1; then
+                            STATUS=\$(aws cloudformation describe-stacks --region ${AWS_REGION} --stack-name ${STACK_NAME} --query "Stacks[0].StackStatus" --output text)
+                            if echo "\$STATUS" | grep -q "UPDATE"; then
+                                aws cloudformation wait stack-update-complete --region ${AWS_REGION} --stack-name ${STACK_NAME}
+                            else
+                                aws cloudformation wait stack-create-complete --region ${AWS_REGION} --stack-name ${STACK_NAME}
+                            fi
+                        fi
                     """
                 }
             }
@@ -82,13 +85,21 @@ pipeline {
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
                                   credentialsId: 'aws-credentials']]) {
                     sh """
-                        ALB_URL=$(aws cloudformation describe-stacks \
+                        # Escaped the leading \$ so Bash handles the execution assignment, not Groovy!
+                        ALB_URL=\$(aws cloudformation describe-stacks \
                             --region ${AWS_REGION} \
                             --stack-name ${STACK_NAME} \
                             --query "Stacks[0].Outputs[?OutputKey=='LoadBalancerDNS'].OutputValue" \
                             --output text)
-                        echo "ALB URL: ${ALB_URL}"
-                        curl -f "http://${ALB_URL}/health" || { echo 'Health check failed'; exit 1; }
+                        
+                        echo "ALB URL: \${ALB_URL}"
+                        
+                        if [ -n "\${ALB_URL}" ] && [ "\${ALB_URL}" != "None" ]; then
+                            curl -f "http://\${ALB_URL}/health" || { echo 'Health check failed'; exit 1; }
+                        else
+                            echo "[ERROR] Could not fetch a valid LoadBalancer DNS configuration output from CloudFormation."
+                            exit 1
+                        fi
                     """
                 }
             }
