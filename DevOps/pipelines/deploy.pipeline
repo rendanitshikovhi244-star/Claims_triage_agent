@@ -34,9 +34,9 @@ pipeline {
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
                                   credentialsId: 'aws-credentials']]) {
                     sh """
-                        aws cloudformation validate-template ^
-                            --region %AWS_REGION% ^
-                            --template-body file://%TEMPLATE_FILE%
+                        aws cloudformation validate-template \
+                            --region ${AWS_REGION} \
+                            --template-body file://${TEMPLATE_FILE}
                     """
                 }
             }
@@ -47,15 +47,15 @@ pipeline {
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
                                   credentialsId: 'aws-credentials']]) {
                     sh """
-                        aws cloudformation deploy ^
-                            --region %AWS_REGION% ^
-                            --stack-name %STACK_NAME% ^
-                            --template-file %TEMPLATE_FILE% ^
-                            --capabilities CAPABILITY_NAMED_IAM ^
-                            --no-fail-on-empty-changeset ^
-                            --parameter-overrides ^
-                                AssetGroup=%ENVIRONMENT% ^
-                                ImageUrl=%ECR_REGISTRY%/%ECR_REPO%:%IMAGE_TAG%
+                        aws cloudformation deploy \
+                            --region ${AWS_REGION} \
+                            --stack-name ${STACK_NAME} \
+                            --template-file ${TEMPLATE_FILE} \
+                            --capabilities CAPABILITY_NAMED_IAM \
+                            --no-fail-on-empty-changeset \
+                            --parameter-overrides \
+                                AssetGroup='${ENVIRONMENT}' \
+                                ImageUrl='${ECR_REGISTRY}/${ECR_REPO}:${IMAGE_TAG}'
                     """
                 }
             }
@@ -66,12 +66,12 @@ pipeline {
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
                                   credentialsId: 'aws-credentials']]) {
                     sh """
-                        aws cloudformation wait stack-update-complete ^
-                            --region %AWS_REGION% ^
-                            --stack-name %STACK_NAME% || ^
-                        aws cloudformation wait stack-create-complete ^
-                            --region %AWS_REGION% ^
-                            --stack-name %STACK_NAME%
+                        aws cloudformation wait stack-update-complete \
+                            --region ${AWS_REGION} \
+                            --stack-name ${STACK_NAME} || \
+                        aws cloudformation wait stack-create-complete \
+                            --region ${AWS_REGION} \
+                            --stack-name ${STACK_NAME}
                     """
                 }
             }
@@ -82,13 +82,13 @@ pipeline {
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
                                   credentialsId: 'aws-credentials']]) {
                     sh """
-                        for /f "tokens=*" %%i in ('aws cloudformation describe-stacks ^
-                            --region %AWS_REGION% ^
-                            --stack-name %STACK_NAME% ^
-                            --query "Stacks[0].Outputs[?OutputKey=='LoadBalancerDNS'].OutputValue" ^
-                            --output text') do set ALB_URL=%%i
-                        echo ALB URL: %ALB_URL%
-                        curl -f http://%ALB_URL%/health || (echo Health check failed && exit /b 1)
+                        ALB_URL=$(aws cloudformation describe-stacks \
+                            --region ${AWS_REGION} \
+                            --stack-name ${STACK_NAME} \
+                            --query "Stacks[0].Outputs[?OutputKey=='LoadBalancerDNS'].OutputValue" \
+                            --output text)
+                        echo "ALB URL: ${ALB_URL}"
+                        curl -f "http://${ALB_URL}/health" || { echo 'Health check failed'; exit 1; }
                     """
                 }
             }
@@ -97,10 +97,10 @@ pipeline {
 
     post {
         success {
-            echo "Deployment to %ENVIRONMENT% successful (image tag: %IMAGE_TAG%)"
+            echo "Deployment to ${ENVIRONMENT} successful (image tag: ${IMAGE_TAG})"
         }
         failure {
-            echo "Deployment to %ENVIRONMENT% failed."
+            echo "Deployment to ${ENVIRONMENT} failed."
         }
         always {
             cleanWs()

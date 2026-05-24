@@ -26,7 +26,7 @@ pipeline {
             steps {
                 sh '''
                     python -m venv .venv
-                    call .venv\Scripts\activate.bat
+                    . .venv/bin/activate
                     pip install -r requirements.txt
                     pytest Source/Python/tests/ -v --tb=short
                 '''
@@ -36,7 +36,7 @@ pipeline {
         stage('Lint') {
             steps {
                 sh '''
-                    call .venv\Scripts\activate.bat
+                    . .venv/bin/activate
                     pip install ruff
                     ruff check Source/Python/src/
                 '''
@@ -46,9 +46,9 @@ pipeline {
         stage('Docker Build') {
             steps {
                 sh """
-                    docker build -t %ECR_REGISTRY%/%ECR_REPO%:%IMAGE_TAG% ^
-                                 -t %ECR_REGISTRY%/%ECR_REPO%:latest ^
-                                 -f %DOCKERFILE_PATH% .
+                    docker build -t ${ECR_REGISTRY}/${ECR_REPO}:${IMAGE_TAG} \
+                        -t ${ECR_REGISTRY}/${ECR_REPO}:latest \
+                        -f ${DOCKERFILE_PATH} .
                 """
             }
         }
@@ -58,9 +58,9 @@ pipeline {
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
                                   credentialsId: 'aws-credentials']]) {
                     sh """
-                        for /f "tokens=*" %%i in ('aws ecr get-login-password --region %AWS_REGION%') do docker login --username AWS --password-stdin %ECR_REGISTRY% < NUL
-                        docker push %ECR_REGISTRY%/%ECR_REPO%:%IMAGE_TAG%
-                        docker push %ECR_REGISTRY%/%ECR_REPO%:latest
+                        aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}
+                        docker push ${ECR_REGISTRY}/${ECR_REPO}:${IMAGE_TAG}
+                        docker push ${ECR_REGISTRY}/${ECR_REPO}:latest
                     """
                 }
             }
@@ -69,13 +69,13 @@ pipeline {
 
     post {
         success {
-            echo "Build successful. Image: %ECR_REGISTRY%/%ECR_REPO%:%IMAGE_TAG%"
+            echo "Build successful. Image: ${ECR_REGISTRY}/${ECR_REPO}:${IMAGE_TAG}"
         }
         failure {
             echo 'Build failed.'
         }
         always {
-            bat 'docker image prune -f || exit /b 0'
+            sh 'docker image prune -f || true'
             cleanWs()
         }
     }
