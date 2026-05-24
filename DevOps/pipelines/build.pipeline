@@ -93,9 +93,21 @@ pipeline {
                                   credentialsId: 'aws-credentials']]) {
                     withEnv(['DOCKER_HOST=']) {
                         sh """
+                            # Install AWS CLI if not present
+                            if ! command -v aws >/dev/null 2>&1; then
+                                echo "Installing AWS CLI v2..."
+                                apt-get update && apt-get install -y python3-pip
+                                pip3 install --no-cache-dir awscli
+                            fi
+                            
+                            # Authenticate with ECR
                             aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}
+                            
+                            # Push images
                             docker push ${ECR_REGISTRY}/${ECR_REPO}:${IMAGE_TAG}
                             docker push ${ECR_REGISTRY}/${ECR_REPO}:latest
+                            
+                            echo "Successfully pushed ${ECR_REGISTRY}/${ECR_REPO}:${IMAGE_TAG}"
                         """
                     }
                 }
