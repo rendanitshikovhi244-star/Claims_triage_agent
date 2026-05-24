@@ -33,6 +33,7 @@ pipeline {
             agent {
                 docker {
                     image 'amazon/aws-cli:latest'
+                    args "--entrypoint=''"  // Overrides the default entrypoint so Jenkins can run commands
                     reuseNode true
                 }
             }
@@ -52,6 +53,7 @@ pipeline {
             agent {
                 docker {
                     image 'amazon/aws-cli:latest'
+                    args "--entrypoint=''"
                     reuseNode true
                 }
             }
@@ -77,6 +79,7 @@ pipeline {
             agent {
                 docker {
                     image 'amazon/aws-cli:latest'
+                    args "--entrypoint=''"
                     reuseNode true
                 }
             }
@@ -101,6 +104,7 @@ pipeline {
             agent {
                 docker {
                     image 'amazon/aws-cli:latest'
+                    args "--entrypoint=''"
                     reuseNode true
                 }
             }
@@ -116,7 +120,7 @@ pipeline {
                         
                         echo "ALB URL: \${ALB_URL}"
                         
-                        if [ -n "\text\${ALB_URL}" ] && [ "\${ALB_URL}" != "None" ]; then
+                        if [ -n "\${ALB_URL}" ] && [ "\${ALB_URL}" != "None" ]; then
                             echo "Performing health check endpoint test..."
                             curl -f "http://\${ALB_URL}/health" || wget -qO- "http://\${ALB_URL}/health" || { echo 'Health check failed'; exit 1; }
                         else
