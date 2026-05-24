@@ -65,6 +65,12 @@ pipeline {
                 }
             }
         }
+        stage('Cleanup') {
+            steps {
+                // ensure this runs on the workspace-providing node
+                sh 'docker image prune -f || true'
+            }
+        }
     }
 
     post {
@@ -75,7 +81,6 @@ pipeline {
             echo 'Build failed.'
         }
         always {
-            sh 'docker image prune -f || true'
             cleanWs()
         }
     }
