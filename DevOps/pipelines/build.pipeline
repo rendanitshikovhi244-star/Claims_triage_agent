@@ -2,9 +2,9 @@ pipeline {
     agent any
 
     environment {
-        AWS_REGION       = 'us-east-1'
+        AWS_REGION        = 'us-east-1'
         ECR_REGISTRY     = credentials('ecr-registry-url')   // e.g. 123456789012.dkr.ecr.us-east-1.amazonaws.com
-        ECR_REPO         = 'claims-triage-agent'
+        ECR_REPO          = 'claims-triage-agent'
         IMAGE_TAG        = "${env.BUILD_NUMBER}-${env.GIT_COMMIT?.take(7) ?: 'latest'}"
         DOCKERFILE_PATH  = 'DevOps/docker/Dockerfile'
     }
@@ -76,11 +76,14 @@ pipeline {
 
         stage('Docker Build') {
             steps {
-                sh """
-                    docker build -t ${ECR_REGISTRY}/${ECR_REPO}:${IMAGE_TAG} \
-                        -t ${ECR_REGISTRY}/${ECR_REPO}:latest \
-                        -f ${DOCKERFILE_PATH} .
-                """
+                // Explicitly strips DOCKER_HOST so the local Docker socket is chosen automatically
+                withEnv(['DOCKER_HOST=']) {
+                    sh """
+                        docker build -t ${ECR_REGISTRY}/${ECR_REPO}:${IMAGE_TAG} \
+                            -t ${ECR_REGISTRY}/${ECR_REPO}:latest \
+                            -f ${DOCKERFILE_PATH} .
+                    """
+                }
             }
         }
 
@@ -88,18 +91,22 @@ pipeline {
             steps {
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
                                   credentialsId: 'aws-credentials']]) {
-                    sh """
-                        aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}
-                        docker push ${ECR_REGISTRY}/${ECR_REPO}:${IMAGE_TAG}
-                        docker push ${ECR_REGISTRY}/${ECR_REPO}:latest
-                    """
+                    withEnv(['DOCKER_HOST=']) {
+                        sh """
+                            aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}
+                            docker push ${ECR_REGISTRY}/${ECR_REPO}:${IMAGE_TAG}
+                            docker push ${ECR_REGISTRY}/${ECR_REPO}:latest
+                        """
+                    }
                 }
             }
         }
+
         stage('Cleanup') {
             steps {
-                // ensure this runs on the workspace-providing node
-                sh 'docker image prune -f || true'
+                withEnv(['DOCKER_HOST=']) {
+                    sh 'docker image prune -f || true'
+                }
             }
         }
     }
