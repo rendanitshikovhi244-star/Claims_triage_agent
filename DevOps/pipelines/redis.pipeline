@@ -41,7 +41,7 @@ pipeline {
             steps {
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
                                   credentialsId: 'aws-credentials']]) {
-                    bat """
+                    sh """
                         aws cloudformation validate-template ^
                             --region %AWS_REGION% ^
                             --template-body file://%TEMPLATE_FILE%
@@ -54,7 +54,7 @@ pipeline {
             steps {
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
                                   credentialsId: 'aws-credentials']]) {
-                    bat """
+                    sh """
                         aws cloudformation deploy ^
                             --region %AWS_REGION% ^
                             --stack-name %STACK_NAME% ^
@@ -77,7 +77,7 @@ pipeline {
             steps {
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
                                   credentialsId: 'aws-credentials']]) {
-                    bat """
+                    sh """
                         aws cloudformation wait stack-create-complete ^
                             --region %AWS_REGION% ^
                             --stack-name %STACK_NAME% 2>nul || ^
@@ -93,7 +93,7 @@ pipeline {
             steps {
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
                                   credentialsId: 'aws-credentials']]) {
-                    bat """
+                    sh """
                         for /f "tokens=*" %%i in ('aws cloudformation describe-stacks ^
                             --region %AWS_REGION% ^
                             --stack-name %STACK_NAME% ^
